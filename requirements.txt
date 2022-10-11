@@ -1,0 +1,14 @@
+numpy
+pandas 
+scipy
+numba
+plotly
+clickhouse-driver
+pyodbc
+sqlalchemy
+psycopg2-binary
+pytz
+python-dateutil
+jupyterlab
+databases[asyncpg]
+dotenv
