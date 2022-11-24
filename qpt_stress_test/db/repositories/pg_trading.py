@@ -3,47 +3,9 @@
 
 """
 import datetime as dt
-import pandas as pd
-from contextlib import ContextDecorator, contextmanager
 
-
-from ..tasks import pgsql_engine
-
-
-
-
-class SqlQuery:
-
-    @contextmanager
-    def db_cursor(*args, **kwargs):
-        with args[0]._db_conn.connect() as connection:
-            try:
-                yield connection
-            finally:
-                pass
-    def __init__(self, query: str, *params, db_conn=pgsql_engine()):
-        self._raw_query = query
-        self._params = params
-        self._query = query.format(*params)
-        self._db_conn = db_conn
-
-    def as_dataframe(self):
-        df = pd.read_sql(self._query, con=self._db_conn)
-        return df
-
-    def as_map(self) -> dict:
-        with self.db_cursor() as con:
-            rs = con.execute(self._query)
-            map = {row.instrument: row for row in rs}
-        return map
-
-    def as_list(self) -> tuple:
-        with self.db_cursor() as con:
-            rs = con.execute(self._query)
-            columns = [column.name for column in rs.cursor.description]
-            data = [[value for value in row] for row in rs]
-        return columns, data
-
+from .drivers.sqlalchemy import SqlQuery
+from ..tasks import bfc_rds_pg_engine
 
 GET_ACTIVE_CRYPTO_CONTRACTS = """
     select 
@@ -60,22 +22,22 @@ GET_ACTIVE_CRYPTO_CONTRACTS = """
     from 
        Trading.definition.instrument_reference 
     where 
-       symbol_bfc is not null and expiration_time >= '{}' 
+       symbol_bfc is not null and expiration_time >= '{0:%Y-%m-%d 00:00:00.000}' 
     limit 10000
 """
 
 
 class TradingRepository:
 
-    def __init__(self, db_conn=pgsql_engine()):
-        self._db_conn = db_conn
+    def __init__(self):
+        pass
     
     def get_active_contracts(self, from_dt: dt.date, to_dt: dt.date):
         # maybe work out from trade list when we actually started tradeing this instrument 
-        return SqlQuery(GET_ACTIVE_CRYPTO_CONTRACTS, f"{from_dt:%Y-%m-%d 00:00:00.000}")
+        return SqlQuery(GET_ACTIVE_CRYPTO_CONTRACTS, from_dt, sqlalchemy_engine_fn=bfc_rds_pg_engine)
 
 
-"""pg_conn = db_tasks.pgsql_engine()
+"""pg_conn = db_tasks.bfc_rds_pg_engine()
 sql = (
         "select "
         "   symbol_bfc as instrument, "
