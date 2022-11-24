@@ -1,10 +1,11 @@
+
 # -*- coding: utf-8 -*-
 """
 """
 import datetime as dt
 
-from .drivers.pyodbc import SqlQuery
-from ..tasks import qpt_sqlsvr_connection
+from .drivers.databricks_sql import SqlQuery
+from ..tasks import gdt_cluster_connection
 from qpt_stress_test.core.config import ChicagoTimeZone
 
 
@@ -78,4 +79,4 @@ class TradingRepository:
         return SqlQuery(GET_CME_POSITIONS,
                         at_dtt_utc.astimezone(ChicagoTimeZone).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
                         at_dtt_utc.date().strftime('%Y-%m-%d'),
-                        pyodbc_conn_fn=qpt_sqlsvr_connection)
+                        databricks_connection_fn=gdt_cluster_connection)

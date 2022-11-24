@@ -15,6 +15,9 @@ LATimeZone = pytz.timezone('America/Los_Angeles')
 HongKongTimeZone = pytz.timezone('Asia/Hong_Kong')
 TokyoTimeZone = pytz.timezone('Asia/Tokyo')
 
+# CLICKHOUSE_HOST = "sv-awoh-md1.na.bluefirecap.net"
+CLICKHOUSE_HOST = "10.17.182.249"
+
 POSTGRES_HOST = os.getenv('POSTGRES_HOST')
 POSTGRES_PORT = os.getenv('POSTGRES_PORT')
 POSTGRES_USER = os.getenv('POSTGRES_USER')
