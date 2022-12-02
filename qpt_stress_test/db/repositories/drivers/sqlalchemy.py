@@ -43,8 +43,8 @@ class SqlQuery:
         with self.db_cursor() as con:
             rs = con.execute(self._query)
             map = {
-                str(hash(tuple(row))): row 
-                for row in rs
+                idx: row 
+                for idx, row in enumerate(rs)
             }
         return map
 

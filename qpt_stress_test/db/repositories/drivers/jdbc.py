@@ -37,12 +37,12 @@ class DatabricksSqlQuery:
             cursor.execute(self._query)
             rs = cursor.fetchall()
             map = {
-                row[0]: {
+                idx: {
                     column[0]: value
                     for column, value in zip(cursor.description, row)
                 }
-                for row in rs
-            }     
+                for idx, row in enumerate(rs)
+            }
         return map
 
     def as_list(self) -> tuple:

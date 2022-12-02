@@ -74,11 +74,11 @@ class SqlQuery:
             cursor.execute(self._query)
             rs = cursor.fetchall()
             map = {
-                str(hash(tuple(row))): {
+                idx: {
                     column[0]: value
                     for column, value in zip(cursor.description, row)
                 }
-                for row in rs
+                for idx, row in enumerate(rs)
             }     
         return map
 

@@ -1,30 +1,25 @@
 
-import logging
 import pandas as pd
-import pyodbc
 
+import clickhouse_driver
 from collections.abc import Callable
 from contextlib import ContextDecorator, contextmanager
-
-logger = logging.getLogger(__name__)
 
 
 class SqlQuery:
 
     @contextmanager
     def db_cursor(self, *args, **kwargs):
-        cursor = self._pyodbc_conn_fn().cursor()
-        try:
-            yield cursor
-        finally:
-            cursor.close()
+        with self._databricks_connection_fn() as connection:
+            with connection.cursor() as cursor:
+                yield cursor
 
     class cursor_context(ContextDecorator):
         def __init__(self):
             self.cursor = None
 
         def __enter__(self, *args, **kwargs):
-            self.cursor = args[0]._pyodbc_conn_fn().cursor()
+            self.cursor = args[0]._databricks_connection_fn().cursor()
             return self
 
         def __call__(self, func):
@@ -34,14 +29,14 @@ class SqlQuery:
             self.cursor.close()
             return False
 
-    def __init__(self, query: str, *params, pyodbc_conn_fn: Callable[[], pyodbc.Connection] = None):
+    def __init__(self, query: str, *params, databricks_connection_fn: Callable[[], databricks.sql.client.Connection] = None):
         self._query = query.format(*params)
         self._params = params
-        self._pyodbc_conn_fn = pyodbc_conn_fn
+        self._databricks_connection_fn = databricks_connection_fn
 
 
     def as_dataframe(self):
-        df = pd.read_sql(self._query, con=self._pyodbc_conn_fn())
+        df = pd.read_sql(self._query, con=self._databricks_connection_fn())
         return df
 
     def as_instrument_map(self) -> dict:

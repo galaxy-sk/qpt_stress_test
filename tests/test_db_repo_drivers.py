@@ -5,9 +5,9 @@ import pytz
 import qpt_stress_test.db.repositories.drivers.databricks_sql as databricks_sql
 import qpt_stress_test.db.repositories.drivers.pyodbc as pyodbc
 import qpt_stress_test.db.repositories.drivers.sqlalchemy as sqlalchemy
-import qpt_stress_test.db.repositories.pg_trading as pg_trading
-import qpt_stress_test.db.repositories.ms_trading as ms_trading
-import qpt_stress_test.db.repositories.databricks_trading as db_trading
+import qpt_stress_test.db.repositories.qpt_pg as qpt_pg
+import qpt_stress_test.db.repositories.qpt_mssql as qpt_mssql
+import qpt_stress_test.db.repositories.databricks as db_trading
 
 from qpt_stress_test.db.tasks import bfc_rds_pg_engine, qpt_sqlsvr_connection,  gdt_cluster_connection
 
@@ -33,7 +33,7 @@ class TestDatabricksDbSelect:
 
         # Act
         qry = databricks_sql.SqlQuery("WITH ROWS AS (SELECT * FROM qpt.trading_balances_eod LIMIT 2) SELECT * FROM ROWS;",
-                                      databricks_connection_fn= gdt_cluster_connection)
+                                      databricks_connection_fn=gdt_cluster_connection)
         rpt_list = qry.as_list()
 
         # Assert
@@ -44,7 +44,7 @@ class TestDatabricksDbSelect:
 
         # Act
         qry = databricks_sql.SqlQuery("WITH ROWS AS (SELECT * FROM qpt.trading_balances_eod LIMIT 2) SELECT * FROM ROWS;",
-                                      databricks_connection_fn= gdt_cluster_connection)
+                                      databricks_connection_fn=gdt_cluster_connection)
         rpt_map = qry.as_map()
 
         # Assert
@@ -58,7 +58,7 @@ class TestPgDbSelect:
         from_dt = dt.date.today()
 
         # Act
-        qry = sqlalchemy.SqlQuery(pg_trading.GET_ACTIVE_CRYPTO_CONTRACTS, from_dt, sqlalchemy_engine_fn=bfc_rds_pg_engine)
+        qry = sqlalchemy.SqlQuery(qpt_pg.GET_ACTIVE_CONTRACTS, from_dt, sqlalchemy_engine_fn=bfc_rds_pg_engine)
         rpt_df = qry.as_dataframe()
 
         # Assert
@@ -69,7 +69,7 @@ class TestPgDbSelect:
         from_dt = dt.date.today()
 
         # Act
-        qry = sqlalchemy.SqlQuery(pg_trading.GET_ACTIVE_CRYPTO_CONTRACTS, from_dt, sqlalchemy_engine_fn=bfc_rds_pg_engine)
+        qry = sqlalchemy.SqlQuery(qpt_pg.GET_ACTIVE_CONTRACTS, from_dt, sqlalchemy_engine_fn=bfc_rds_pg_engine)
         rpt_list = qry.as_list()
 
         # Assert
@@ -80,7 +80,7 @@ class TestPgDbSelect:
         from_dt = dt.date.today()
 
         # Act
-        qry = sqlalchemy.SqlQuery(pg_trading.GET_ACTIVE_CRYPTO_CONTRACTS, from_dt, sqlalchemy_engine_fn=bfc_rds_pg_engine)
+        qry = sqlalchemy.SqlQuery(qpt_pg.GET_ACTIVE_CONTRACTS, from_dt, sqlalchemy_engine_fn=bfc_rds_pg_engine)
         rpt_map = qry.as_instrument_map()
 
         # Assert
@@ -94,7 +94,7 @@ class TestMSSqlDbSelect:
         at_dtt_utc = dt.datetime(2022, 11, 7, 21, 0, 0)
 
         # Act
-        qry = pyodbc.SqlQuery(ms_trading.GET_CME_POSITIONS, 
+        qry = pyodbc.SqlQuery(qpt_mssql.GET_CME_POSITIONS, 
                               at_dtt_utc.astimezone(ChicagoTimeZone).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
                               at_dtt_utc.date().strftime('%Y-%m-%d'),
                               pyodbc_conn_fn=qpt_sqlsvr_connection)
@@ -108,7 +108,7 @@ class TestMSSqlDbSelect:
         at_dtt_utc = dt.datetime(2022, 11, 7, 21, 0, 0)
 
         # Act
-        qry = pyodbc.SqlQuery(ms_trading.GET_CME_POSITIONS, 
+        qry = pyodbc.SqlQuery(qpt_mssql.GET_CME_POSITIONS, 
                               at_dtt_utc.astimezone(ChicagoTimeZone).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
                               at_dtt_utc.date().strftime('%Y-%m-%d'),
                               pyodbc_conn_fn=qpt_sqlsvr_connection)
@@ -122,7 +122,7 @@ class TestMSSqlDbSelect:
         at_dtt_utc = dt.datetime(2022, 11, 7, 21, 0, 0)
 
         # Act
-        qry = pyodbc.SqlQuery(ms_trading.GET_CME_POSITIONS, 
+        qry = pyodbc.SqlQuery(qpt_mssql.GET_CME_POSITIONS, 
                               at_dtt_utc.astimezone(ChicagoTimeZone).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
                               at_dtt_utc.date().strftime('%Y-%m-%d'),
                               pyodbc_conn_fn=qpt_sqlsvr_connection)
