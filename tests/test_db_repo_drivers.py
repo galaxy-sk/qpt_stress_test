@@ -95,7 +95,8 @@ class TestMSSqlDbSelect:
 
         # Act
         qry = pyodbc.SqlQuery(qpt_mssql.GET_CME_POSITIONS, 
-                              at_dtt_utc.astimezone(ChicagoTimeZone),
+                              at_dtt_utc.astimezone(ChicagoTimeZone).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
+                              at_dtt_utc.date().strftime('%Y-%m-%d'),
                               pyodbc_conn_fn=qpt_sqlsvr_connection)
         rpt_df = qry.as_dataframe()
 
@@ -108,7 +109,8 @@ class TestMSSqlDbSelect:
 
         # Act
         qry = pyodbc.SqlQuery(qpt_mssql.GET_CME_POSITIONS, 
-                              at_dtt_utc.astimezone(ChicagoTimeZone),
+                              at_dtt_utc.astimezone(ChicagoTimeZone).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
+                              at_dtt_utc.date().strftime('%Y-%m-%d'),
                               pyodbc_conn_fn=qpt_sqlsvr_connection)
         rpt_list = qry.as_list()
 
@@ -121,7 +123,8 @@ class TestMSSqlDbSelect:
 
         # Act
         qry = pyodbc.SqlQuery(qpt_mssql.GET_CME_POSITIONS, 
-                              at_dtt_utc.astimezone(ChicagoTimeZone),
+                              at_dtt_utc.astimezone(ChicagoTimeZone).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
+                              at_dtt_utc.date().strftime('%Y-%m-%d'),
                               pyodbc_conn_fn=qpt_sqlsvr_connection)
         rpt_map = qry.as_instrument_map()
 

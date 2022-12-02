@@ -44,7 +44,7 @@ class SqlQuery:
             cursor.execute(self._query)
             rs = cursor.fetchall()
             map = {
-                (row.instrument if "instrument" in row else row.symbol_bfc).upper(): {
+                row.instrument.upper(): {
                     column[0]: value
                     for column, value in zip(cursor.description, row)
                 }

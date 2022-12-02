@@ -1,12 +1,15 @@
 import datetime as dt
 import pandas as pd
 
-import qpt_stress_test.core.qfl_config as config
-import qpt_stress_test.db.repositories.qpt_mssql as qpt_mssql
-from qpt_historic_pos.impl.utils.times import ChicagoTimeZone, UtcTimeZone
-from qpt_historic_pos.impl.open_positions_report import gen_open_position_report
 from nav.utils import (
     get_marks, get_assets, get_loans, get_edf_cash, get_bank_balances, summarize_bluescales, summarize_all)
+from qpt_historic_pos.impl.utils.times import ChicagoTimeZone, UtcTimeZone
+from qpt_historic_pos.impl.open_positions_report import gen_open_position_report
+import qpt_stress_test.core.qfl_config as config
+
+import qpt_stress_test.db.repositories.databricks as databricks
+import qpt_stress_test.db.repositories.qpt_mssql as qpt_mssql
+import qpt_stress_test.db.repositories.qpt_pg as qpt_pg
 
 
 # These lists of accounts are from Bovas NAV code and change regularly; update them on core.config.qpt
@@ -219,43 +222,42 @@ def summary_exchange_balances_00utc(nav_date, assets_df, loans_df, summary):
     edf_bal = summary.loc['EDF'][report_yyyymmdd]
     clearing_bal = summary.loc['Total Balances at Clearing Brokers'][report_yyyymmdd]
 
-    balances_df = pd.concat([assets_df, loans_df], ignore_index=True)
+    balances_df = pd.concat([assets_df, loans_df])
 
-    # Wedbush hack
+    # Webush hack
     wedbush_amt = 8579966.92
-    balances_df = pd.concat([balances_df, pd.DataFrame.from_dict({
-        'Account': ['WEDBUSH'],
-        'Balance': [wedbush_amt],
-        'BalanceType': [''],
-        'Currency': ['USD'],
-        'Source': [''],
-        'Timestamp': [report_yyyymmdd],
-        'Timestamp_Native': [report_timestamp],
-        'Notional': [wedbush_amt]
-        })], ignore_index=True)
+    balances_df = balances_df.append({
+        'Account': 'WEDBUSH', 
+        'Balance': wedbush_amt, 
+        'BalanceType': '', 
+        'Currency': 'USD', 
+        'Source': '', 
+        'Timestamp': report_yyyymmdd, 
+        'Timestamp_Native': report_timestamp, 
+        'Notional': wedbush_amt
+        }, ignore_index=True)
 
     # 
-    balances_df = pd.concat([balances_df, pd.DataFrame.from_dict({
-        'Account': ['CASH'],
-        'Balance': [cash_bal],
-        'BalanceType': ['Balance'],
-        'Currency': ['USD'],
-        'Source': [''],
-        'Timestamp': [report_yyyymmdd],
-        'Timestamp_Native': [report_timestamp],
-        'Notional': [cash_bal]
-        })], ignore_index=True)
-
-    balances_df = pd.concat([balances_df, pd.DataFrame.from_dict({
-        'Account': ['ED&F Man Capital'],
-        'Balance': [edf_bal],
-        'BalanceType': ['Balance'],
-        'Currency': ['USD'],
-        'Source': [''],
-        'Timestamp': [report_yyyymmdd],
-        'Timestamp_Native': [report_timestamp],
-        'Notional': [edf_bal]
-        })], ignore_index=True)
+    balances_df = balances_df.append({
+        'Account': 'CASH', 
+        'Balance': cash_bal, 
+        'BalanceType': 'Balance', 
+        'Currency': 'USD', 
+        'Source': '', 
+        'Timestamp': report_yyyymmdd, 
+        'Timestamp_Native': report_timestamp, 
+        'Notional': cash_bal
+        }, ignore_index=True)
+    balances_df = balances_df.append({
+        'Account': 'ED&F Man Capital', 
+        'Balance': edf_bal, 
+        'BalanceType': 'Balance', 
+        'Currency': 'USD', 
+        'Source': '', 
+        'Timestamp': report_yyyymmdd, 
+        'Timestamp_Native': report_timestamp, 
+        'Notional': edf_bal
+        }, ignore_index=True)
 
     balances_df[''] = ''
     balances_df['REFERENCE 1'] = [
@@ -296,12 +298,10 @@ def summary_asset_loans_cash(summary_exchange_balances_df: pd.DataFrame) -> pd.D
     asset_loans_cash_df["notional"] = summary_exchange_balances_df["Notional"] 
     asset_loans_cash_df["mark_price"] = [
         notional / balance
-        for balance, notional in zip(summary_exchange_balances_df["Balance"],
-                                     summary_exchange_balances_df["Notional"])]
+        for balance, notional in zip(summary_exchange_balances_df["Balance"], summary_exchange_balances_df["Notional"])]
     asset_loans_cash_df["unrealized_pnl"] = [
         notional if balance_type == "unrealized" else 0 
-        for notional, balance_type in zip(summary_exchange_balances_df["Notional"],
-                                          summary_exchange_balances_df["BalanceType"])]
+        for notional, balance_type in zip(summary_exchange_balances_df["Notional"], summary_exchange_balances_df["BalanceType"])] 
     asset_loans_cash_df["instrument_type"] = [
         instrument_type_map(endpoint, account, balance, balance_type, account_type)
         for endpoint, account, balance, balance_type, account_type in zip(
@@ -315,100 +315,82 @@ def summary_asset_loans_cash(summary_exchange_balances_df: pd.DataFrame) -> pd.D
     return asset_loans_cash_df
 
 
-def generate_reports(eod_date: dt.date, db_chicago_datetime: dt.datetime, trading_repo, marketdata_repo=None):
-
-    report_utc_datetime = db_chicago_datetime.astimezone(UtcTimeZone)
-
-    # Run a facsimile of the Bovas NAV report
+def run(eod_date: dt.date, db_chicago_datetime: dt.datetime, trading_repo, marketdata_repo):
+    # Run a facimile of the Bovas NAV report
     assets_df, loans_df, summary = generate_daily_nav_00utc(eod_date)
     summary_exchange_balances_df = summary_exchange_balances_00utc(eod_date, assets_df, loans_df, summary)
 
     # Run Bowan's net_open_positions_report
-    net_open_position_report_df = gen_open_position_report(db_chicago_datetime)
+    net_open_positions_df = gen_open_position_report(db_chicago_datetime)
 
     # Get the CME positions directly from the MSSQL
-    # columns = ['instrument','exchange','account','position','notional','price','unrealized_pnl','instrument_type',
-    #            'expiration_time','is_linear','underlying','EntryCost']
-    cme_rollback = 0
-    cme_df = trading_repo.get_cme_positions(report_utc_datetime).as_dataframe()
-    while cme_df.empty and cme_rollback < 4:
-        cme_rollback += 1
-        cme_df = trading_repo.get_cme_positions(report_utc_datetime - dt.timedelta(days=cme_rollback)).as_dataframe()
-    if cme_rollback:
-        print(f"Taking CME positions from {report_utc_datetime - dt.timedelta(days=cme_rollback):%Y-%m-%d}")
-    if cme_df.empty:
-        print(f"No CME positions from {report_utc_datetime - dt.timedelta(days=cme_rollback):%Y-%m-%d}")
-    
-    cme_positions = { col_name: [] for col_name in cme_df.columns}
-    for idx, rs in cme_df.iterrows():
-        for column in cme_df.columns:
-            cme_positions[column].append(rs[column])
-    cme_positions["unrealized_pnl"] = [0 for _ in range(len(cme_positions["unrealized_pnl"]))]
-    cme_positions["mark_price"] = cme_positions["price"]
-    for col in cme_df.columns:
-        if col not in net_open_position_report_df.columns:
-            cme_positions.pop(col)
+    cme_df = trading_repo.get_cme_positions(db_chicago_datetime.astimezone(UtcTimeZone)).as_dataframe()
+    # 'instrument','exchange','account','position','notional','price','unrealized_pnl','instrument_type',
+    # 'expiration_time','is_linear','underlying','EntryCost'
+    cme_positions = [{
+        "exchange": str(rs['exchange']),
+        "account": str(rs['account']),
+        "instrument": str(rs['instrument']),
+        "position": float(rs['position']),
+        "notional": float(rs['notional']),
+        "mark_price": float(rs['price']),
+        "unrealized_pnl": float(0),
+        "instrument_type": str(rs['instrument_type']),
+        "expiration_time": rs['expiration_time'],
+        "is_linear": int(rs['is_linear']),
+        "underlying": str(rs['underlying'])
+    } for idx, rs in cme_df.iterrows()]
 
-    net_open_position_report_df = pd.concat([net_open_position_report_df, pd.DataFrame.from_dict(cme_positions)], 
-                                            ignore_index=True)
+    for cme_position_dict in cme_positions:
+        net_open_positions_df = net_open_positions_df.append(cme_position_dict, ignore_index=True)
 
-    # Reformat into format to combine nav & deriv positions
-    asset_loans_cash_df = summary_asset_loans_cash(summary_exchange_balances_df)
-    asset_and_open_positions_df = pd.concat([net_open_position_report_df, asset_loans_cash_df], 
-                                            ignore_index=True)
+    # Asset & Open positions
+    summary_asset_loans_cash_df = summary_asset_loans_cash(summary_exchange_balances_df)
+    asset_and_open_positions_df = pd.concat([net_open_positions_df, summary_asset_loans_cash_df])
 
     # Get marks for all positions:
-    """pymd.init()
-    pymd.enable_logging()
-    df_index_ranges = pymd.data_access.coinmetrics_reference_rate_supported_tokens()
-    all_symbols = list(df_index_ranges['symbol'].unique())
-    first_datetime = pymd.UtcTimeZone.localize(df_index_ranges['start_time'].min().to_pydatetime())
-    last_datetime = pymd.UtcTimeZone.localize(df_index_ranges['end_time'].max().to_pydatetime())
-
     report_datetime = dt.datetime(2022, 11, 20, 22, 0, 0, 0)
     get_start_datetime = pymd.UtcTimeZone.localize(report_datetime - dt.timedelta(days=2))
     get_end_datetime = UtcTimeZone.localize(db_chicago_datetime)
     symbols = set(asset_and_open_positions_df["instrument"])
     underlying = set(asset_and_open_positions_df["underlying"])
-    marketdata_repo.reference_rate_ts(symbols, )"""
-    
-    return net_open_position_report_df, summary_exchange_balances_df, asset_loans_cash_df, asset_and_open_positions_df
+    marketdata_repo.reference_rate_ts(symbols, )
+    return net_open_positions_df, summary_exchange_balances_df, summary_asset_loans_cash_df, asset_and_open_positions_df
 
 
-def run(run_as_eod: bool):
+pymd.init()
+pymd.enable_logging()
+df_index_ranges = pymd.data_access.coinmetrics_reference_rate_supported_tokens()
+all_symbols = list(df_index_ranges['symbol'].unique())
+first_datetime = pymd.UtcTimeZone.localize(df_index_ranges['start_time'].min().to_pydatetime())
+last_datetime = pymd.UtcTimeZone.localize(df_index_ranges['end_time'].max().to_pydatetime())
 
-    if run_as_eod:
-        eod_date = dt.date(2022, 12, 5)
-        db_datetime = dt.datetime.combine(eod_date, dt.time(hour=16, minute=0, second=0))
-        db_chicago_datetime = ChicagoTimeZone.localize(db_datetime)
+if __name__ == "__main__":
+    import sys, os
+    sys.path.append(os.path.join(os.getcwd(), "qpt_historic_pos", "impl"))
+
+    eod = True
+    if eod:
+        eod_date = dt.date(2022, 11, 30)
+        db_chicago_datetime =  ChicagoTimeZone.localize(dt.datetime.combine(eod_date, dt.time(hour=16, minute=0, second=0)))
+        db_utc_time = db_chicago_datetime.astimezone(UtcTimeZone)
+
     else:
         # Live
         report_date = dt.date.today()
         eod_date = report_date - dt.timedelta(days=1)
         db_chicago_datetime = dt.datetime.now().astimezone(ChicagoTimeZone)
+        db_utc_time = db_chicago_datetime.astimezone(UtcTimeZone)
 
     (
-        net_open_position_report_df,
+        net_open_positions_df,
         summary_exchange_balances_df,
-        asset_loans_cash_df,
+        summary_asset_loans_cash_df,
         asset_and_open_positions_df
-    ) = generate_reports(eod_date, db_chicago_datetime, trading_repo=qpt_mssql.TradingRepository())
+    ) = run(eod_date, db_chicago_datetime,
+            trading_repo=qpt_mssql.TradingRepository())
 
     # Dump to file
-    db_utc_datetime = db_chicago_datetime.astimezone(UtcTimeZone)
-    net_open_position_report_df.to_csv(f"{db_utc_datetime:%Y-%m-%d_%H%M%S}_net_open_positions.csv", sep=',')
+    net_open_positions_df.to_csv(f"{db_utc_time:%Y-%m-%d_%H%M%S}_net_open_positions.csv", sep=',')
     summary_exchange_balances_df.to_csv(f"{eod_date:%Y-%m-%d}_summary_exchange_balances_00utc.csv", sep=',')
-    asset_and_open_positions_df.to_csv(f"{db_utc_datetime:%Y-%m-%d_%H%M%S}_asset_and_open_positions.csv", sep=',')
-
-    
-if __name__ == "__main__":
-
-    # Bowen's code has some assumptions on location of modules relative to his code:
-    import sys
-    import os
-    if os.path.join(os.getcwd(), "qpt_historic_pos", "impl") not in sys.path:
-        print(f"Adding {os.path.join(os.getcwd(), 'qpt_historic_pos', 'impl')} to sys.path")
-        sys.path.append(os.path.join(os.getcwd(), "qpt_historic_pos", "impl"))
-
-    run(run_as_eod=True)
-    exit()
+    asset_and_open_positions_df.to_csv(f"{db_utc_time:%Y-%m-%d_%H%M%S}_asset_and_open_positions.csv", sep=',')
