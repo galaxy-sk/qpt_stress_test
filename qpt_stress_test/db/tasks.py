@@ -42,7 +42,7 @@ async def pgsql_database() -> databases.Database:
 
 def gdt_cluster_connection() -> databricks.sql.client.Connection:
     connection = databricks.sql.connect(
-        server_hostname = config.DATABRICKS_HOSTNAME,   # "gdt-mo.cloud.databricks.com",            #os.getenv("DATABRICKS_SERVER_HOSTNAME"),
+        server_hostname = config.DATABRICKS_SERVER_HOSTNAME,   # "gdt-mo.cloud.databricks.com",            #os.getenv("DATABRICKS_SERVER_HOSTNAME"),
         http_path = config.DATABRICKS_HTTP_PATH,        # "/sql/1.0/endpoints/b09bc4bc73bccd24",    #os.getenv("DATABRICKS_HTTP_PATH"),
         access_token = config.DATABRICKS_ACCESS_TOKEN   # "dapi11e376e20349a386f4764df7af20504a")   #os.getenv("DATABRICKS_TOKEN")
     )

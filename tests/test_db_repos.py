@@ -113,7 +113,7 @@ FROM
 	GROUP BY Symbol) p
 	JOIN Marks m ON p.Symbol = m.Symbol
 	JOIN Symbols s ON p.Symbol = s.Contract;
-""".format(dt.datetime.combine(dt.date.today() - dt.timedelta(days=1), dt.time(16, 0, 0)))
+""".format(dt.datetime.combine(dt.date.today() - dt.timedelta(days=4), dt.time(16, 0, 0)))
 
         # Act
         df = repo.adhoc_query(sql).as_dataframe()
