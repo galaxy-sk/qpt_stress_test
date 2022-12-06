@@ -20,7 +20,7 @@ TokyoTimeZone = pytz.timezone('Asia/Tokyo')
 CLICKHOUSE_HOST =  os.getenv('CLICKHOUSE_HOST') #"10.17.181.234"   #"10.17.182.249"
 CLICKHOUSE_USER =  os.getenv('CLICKHOUSE_USER') #"reader1"
 
-DATABRICKS_HOSTNAME  =  os.getenv('DATABRICKS_HOSTNAME') # "gdt-mo.cloud.databricks.com" 
+DATABRICKS_SERVER_HOSTNAME  =  os.getenv('DATABRICKS_SERVER_HOSTNAME') # "gdt-mo.cloud.databricks.com" 
 DATABRICKS_HTTP_PATH  =  os.getenv('DATABRICKS_HTTP_PATH') # "/sql/1.0/endpoints/b09bc4bc73bccd24"
 DATABRICKS_ACCESS_TOKEN  =  os.getenv('DATABRICKS_ACCESS_TOKEN') # "dapi11e376e20349a386f4764df7af20504a"
 

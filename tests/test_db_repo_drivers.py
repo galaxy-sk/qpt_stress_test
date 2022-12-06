@@ -22,7 +22,7 @@ class TestDatabricksDbSelect:
 
         # Act
         qry = databricks_sql.SqlQuery("WITH ROWS AS (SELECT * FROM qpt.trading_balances_eod LIMIT 2) SELECT * FROM ROWS;",
-                                      databricks_connection_fn= gdt_cluster_connection)
+                                      databricks_connection_fn=gdt_cluster_connection)
         rpt_df = qry.as_dataframe()
 
         # Assert
@@ -95,8 +95,7 @@ class TestMSSqlDbSelect:
 
         # Act
         qry = pyodbc.SqlQuery(qpt_mssql.GET_CME_POSITIONS, 
-                              at_dtt_utc.astimezone(ChicagoTimeZone).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
-                              at_dtt_utc.date().strftime('%Y-%m-%d'),
+                              at_dtt_utc.astimezone(ChicagoTimeZone),
                               pyodbc_conn_fn=qpt_sqlsvr_connection)
         rpt_df = qry.as_dataframe()
 
@@ -109,8 +108,7 @@ class TestMSSqlDbSelect:
 
         # Act
         qry = pyodbc.SqlQuery(qpt_mssql.GET_CME_POSITIONS, 
-                              at_dtt_utc.astimezone(ChicagoTimeZone).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
-                              at_dtt_utc.date().strftime('%Y-%m-%d'),
+                              at_dtt_utc.astimezone(ChicagoTimeZone),
                               pyodbc_conn_fn=qpt_sqlsvr_connection)
         rpt_list = qry.as_list()
 
@@ -123,8 +121,7 @@ class TestMSSqlDbSelect:
 
         # Act
         qry = pyodbc.SqlQuery(qpt_mssql.GET_CME_POSITIONS, 
-                              at_dtt_utc.astimezone(ChicagoTimeZone).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
-                              at_dtt_utc.date().strftime('%Y-%m-%d'),
+                              at_dtt_utc.astimezone(ChicagoTimeZone),
                               pyodbc_conn_fn=qpt_sqlsvr_connection)
         rpt_map = qry.as_instrument_map()
 

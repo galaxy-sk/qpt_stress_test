@@ -53,7 +53,8 @@ class SqlQuery:
 
 
     def as_dataframe(self):
-        df = pd.read_sql(self._query, con=self._databricks_connection_fn())
+        db_connection=self._databricks_connection_fn()
+        df = pd.read_sql(self._query, con=db_connection)
         return df
 
     def as_instrument_map(self) -> dict:
@@ -61,7 +62,7 @@ class SqlQuery:
             cursor.execute(self._query)
             rs = cursor.fetchall()
             map = {
-                row.instrument.upper(): {
+                (row.instrument if "instrument" in row else row.symbol_bfc).upper(): {
                     column[0]: value
                     for column, value in zip(cursor.description, row)
                 }

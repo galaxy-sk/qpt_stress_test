@@ -48,8 +48,9 @@ class SqlQuery:
         with self.db_cursor() as cursor:
             cursor.execute(self._query)
             rs = cursor.fetchall()
+            column_names = [col[0] for col in cursor.description]
             map = {
-                row.instrument.upper(): {
+                (row.instrument if "instrument" in column_names else row.symbol_bfc).upper(): {
                     column[0]: value
                     for column, value in zip(cursor.description, row)
                 }
