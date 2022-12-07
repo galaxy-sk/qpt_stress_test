@@ -332,10 +332,14 @@ def summarize_all(td, yd, bs):
     yd['assets'].loc[yd['assets'].Account=='BINE-2-S2-M','Notional'].sum(), td['assets'].loc[td['assets'].Account=='BINE-2-S2-M','Notional'].sum()
     summary.loc['BINE-2-S2-P',int_dt_yday],summary.loc['BINE-2-S2-P',int_dt_today] = \
     yd['assets'].loc[yd['assets'].Account=='BINE-2-S2-P','Notional'].sum(), td['assets'].loc[td['assets'].Account=='BINE-2-S2-P','Notional'].sum()        
+    summary.loc['GATE-1-M-C',int_dt_yday],summary.loc['GATE-1-M-C',int_dt_today] = \
+    yd['assets'].loc[yd['assets'].Account=='GATE-1-M-C','Notional'].sum(), td['assets'].loc[td['assets'].Account=='GATE-1-M-C','Notional'].sum()
     summary.loc['GATE-1-M-E',int_dt_yday],summary.loc['GATE-1-M-E',int_dt_today] = \
     yd['assets'].loc[yd['assets'].Account=='GATE-1-M-E','Notional'].sum(), td['assets'].loc[td['assets'].Account=='GATE-1-M-E','Notional'].sum()
     summary.loc['GATE-1-M-M',int_dt_yday],summary.loc['GATE-1-M-M',int_dt_today] = \
     yd['assets'].loc[yd['assets'].Account=='GATE-1-M-M','Notional'].sum(), td['assets'].loc[td['assets'].Account=='GATE-1-M-M','Notional'].sum()
+    summary.loc['GATE-1-M-PT',int_dt_yday],summary.loc['GATE-1-M-PT',int_dt_today] = \
+    yd['assets'].loc[yd['assets'].Account=='GATE-1-M-PT','Notional'].sum(), td['assets'].loc[td['assets'].Account=='GATE-1-M-PT','Notional'].sum()
     summary.loc['DEFI-STRAT-1',int_dt_yday],summary.loc['DEFI-STRAT-1',int_dt_today] = \
     yd['assets'].loc[yd['assets'].Account=='DEFI-STRAT-1','Notional'].sum(), td['assets'].loc[td['assets'].Account=='DEFI-STRAT-1','Notional'].sum()
     summary.loc['DEFI-STRAT-2',int_dt_yday],summary.loc['DEFI-STRAT-2',int_dt_today] = \
@@ -344,6 +348,10 @@ def summarize_all(td, yd, bs):
     yd['assets'].loc[yd['assets'].Account=='DEFI-STRAT-3','Notional'].sum(), td['assets'].loc[td['assets'].Account=='DEFI-STRAT-3','Notional'].sum()
     summary.loc['DEFI-STRAT-4',int_dt_yday],summary.loc['DEFI-STRAT-4',int_dt_today] = \
     yd['assets'].loc[yd['assets'].Account=='DEFI-STRAT-4','Notional'].sum(), td['assets'].loc[td['assets'].Account=='DEFI-STRAT-4','Notional'].sum()
+    summary.loc['DEFI-STRAT-5',int_dt_yday],summary.loc['DEFI-STRAT-5',int_dt_today] = \
+    yd['assets'].loc[yd['assets'].Account=='DEFI-STRAT-5','Notional'].sum(), td['assets'].loc[td['assets'].Account=='DEFI-STRAT-5','Notional'].sum()
+    summary.loc['DEFI-STRAT-6',int_dt_yday],summary.loc['DEFI-STRAT-6',int_dt_today] = \
+    yd['assets'].loc[yd['assets'].Account=='DEFI-STRAT-6','Notional'].sum(), td['assets'].loc[td['assets'].Account=='DEFI-STRAT-6','Notional'].sum()
     summary.loc['DYDX-1-M-P',int_dt_yday],summary.loc['DYDX-1-M-P',int_dt_today] = \
     yd['assets'].loc[yd['assets'].Account=='DYDX-1-M-P','Notional'].sum(), td['assets'].loc[td['assets'].Account=='DYDX-1-M-P','Notional'].sum()
     
@@ -496,4 +504,5 @@ def export_to_excel(td, yd, summary, fileloc):
     ws = wb['NAV Summary 00UTC']
     ws['D6'] = "{} {}, {} 00:00UTC".format(td["day"].strftime('%B'), td["day"].day, td["day"].year)
     # wb.save(r"{}/Operations/EOD Asset Report/{}_NAV REPORT 00UTC.xlsx".format(fileloc, td["day"].strftime('%Y%m%d')))
+    # wb.save(r"C:/Users/bpr/Documents/b.works/pending_navs/00utc/sent/{}_NAV REPORT 00UTC.xlsx".format(td["day"].strftime('%Y%m%d')))
     wb.save(r"C:/Temp/{}_NAV REPORT 00UTC.xlsx".format(td["day"].strftime('%Y%m%d')))
