@@ -57,5 +57,3 @@ else:
         f"DRIVER={MSSQL_DRIVER};SERVER={MSSQL_HOST};PORT={MSSQL_PORT};"
         f"UID={MSSQL_USER};PWD={MSSQL_PASSWORD};DATABASE={MSSQL_DATABASE};"
         "TrustServerCertificate=Yes")
-
-
