@@ -12,3 +12,7 @@ python-dateutil
 jupyterlab
 databases[asyncpg]
 dotenv
+pytest
+databricks
+databricks-sql
+databricks-sql-connector

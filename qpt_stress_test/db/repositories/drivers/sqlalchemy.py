@@ -33,8 +33,9 @@ class SqlQuery:
     def as_instrument_map(self) -> dict:
         with self.db_cursor() as con:
             rs = con.execute(self._query)
+            column_names = [column.name for column in rs.cursor.description]
             map = {
-                row.instrument: row 
+                row.instrument if "instrument" in column_names else row.symbol_bfc: row 
                 for row in rs
             }
         return map
@@ -43,14 +44,14 @@ class SqlQuery:
         with self.db_cursor() as con:
             rs = con.execute(self._query)
             map = {
-                str(hash(tuple(row))): row 
-                for row in rs
+                idx: row 
+                for idx, row in enumerate(rs)
             }
         return map
 
     def as_list(self) -> tuple:
         with self.db_cursor() as con:
             rs = con.execute(self._query)
-            columns = [column.name for column in rs.cursor.description]
+            column_names = [column.name for column in rs.cursor.description]
             data = [[value for value in row] for row in rs]
-        return columns, data
+        return column_names, data

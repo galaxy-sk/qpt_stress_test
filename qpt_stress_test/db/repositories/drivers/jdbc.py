@@ -23,8 +23,9 @@ class DatabricksSqlQuery:
         with self.db_cursor() as cursor:
             cursor.execute(self._query)
             rs = cursor.fetchall()
+            column_names = [column[0] for column in cursor.description]
             map = {
-                row.instrument.upper(): {
+                (row.instrument if "instrument" in column_names else row.symbol_bfc).upper(): {
                     column[0]: value
                     for column, value in zip(cursor.description, row)
                 }
@@ -37,21 +38,21 @@ class DatabricksSqlQuery:
             cursor.execute(self._query)
             rs = cursor.fetchall()
             map = {
-                row[0]: {
+                idx: {
                     column[0]: value
                     for column, value in zip(cursor.description, row)
                 }
-                for row in rs
-            }     
+                for idx, row in enumerate(rs)
+            }
         return map
 
     def as_list(self) -> tuple:
         with self.db_cursor() as cursor:
             cursor.execute(self._query)
             rs = cursor.fetchall()
-            columns = [column[0] for column in cursor.description]
+            column_names = [column[0] for column in cursor.description]
             data = [[value for value in row] for row in rs]
-        return columns, data
+        return column_names, data
 
 
 class MsSqlQuery:
@@ -76,8 +77,9 @@ class MsSqlQuery:
         with self.db_cursor() as cursor:
             cursor.execute(self._query)
             rs = cursor.fetchall()
+            column_names = [column[0] for column in cursor.description]
             map = {
-                row.instrument.upper(): {
+                (row.instrument if "instrument" in column_names else row.symbol_bfc).upper(): {
                     column[0]: value
                     for column, value in zip(cursor.description, row)
                 }
@@ -89,9 +91,9 @@ class MsSqlQuery:
         with self.db_cursor() as cursor:
             cursor.execute(self._query)
             rs = cursor.fetchall()
-            columns = [column[0] for column in cursor.description]
+            column_names = [column[0] for column in cursor.description]
             data = [[value for value in row] for row in rs]
-        return columns, data
+        return column_names, data
 
 
 class PgSqlQuery:
@@ -109,19 +111,20 @@ class PgSqlQuery:
             .format("jdbc") \
             .option("url", POSTGRES_URL) \
             .option("driver", POSTGRES_JDBC_DRIVER) \
-            .option("dbtable", exchange_position_snapshot_sql) \
+            .option("dbtable", (self._query)) \
             .load()
         return df
 
     def as_instrument_map(self) -> dict:
         with self.db_cursor() as con:
             rs = con.execute(self._query)
-            map = {row.instrument: row for row in rs}
+            column_names =  [column.name for column in rs.cursor.description]
+            map = {row.instrument if "instrument" in column_names else row.symbol_bfc: row for row in rs}
         return map
 
     def as_list(self) -> tuple:
         with self.db_cursor() as con:
             rs = con.execute(self._query)
-            columns = [column.name for column in rs.cursor.description]
+            column_names = [column.name for column in rs.cursor.description]
             data = [[value for value in row] for row in rs]
-        return columns, data
+        return column_names, data

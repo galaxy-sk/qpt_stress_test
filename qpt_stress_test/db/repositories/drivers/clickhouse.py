@@ -1,33 +1,16 @@
 
 import pandas as pd
 
-import databricks.sql.client
+import clickhouse_driver
 from collections.abc import Callable
 from contextlib import ContextDecorator, contextmanager
-
-#from pyspark.sql import SparkSession
-
-#spark = SparkSession.builder.appName("PC").enableHiveSupport().getOrCreate()
-#spark.table('derivatives.'+ccy+'_joint_events').toPandas()
-
-#def example():
-#    with databricks.sql.connect(server_hostname = "gdt-mo.cloud.databricks.com",       #os.getenv("DATABRICKS_SERVER_HOSTNAME"),
-#                     http_path       = "/sql/1.0/endpoints/b09bc4bc73bccd24",   #os.getenv("DATABRICKS_HTTP_PATH"),
-#                     access_token    = "dapi11e376e20349a386f4764df7af20504a") as connection:   #os.getenv("DATABRICKS_TOKEN")
-#
-#        with connection.cursor() as cursor:
-#            cursor.execute("WITH ROWS AS (SELECT * FROM qpt.trading_balances_eod LIMIT 2) SELECT * FROM ROWS;")
-#            result = cursor.fetchall()
-#
-#        for row in result:
-#            print(row)
 
 
 class SqlQuery:
 
     @contextmanager
     def db_cursor(self, *args, **kwargs):
-        with self._databricks_connection_fn() as connection:   #os.getenv("DATABRICKS_TOKEN")
+        with self._databricks_connection_fn() as connection:
             with connection.cursor() as cursor:
                 yield cursor
 
@@ -53,8 +36,7 @@ class SqlQuery:
 
 
     def as_dataframe(self):
-        db_connection=self._databricks_connection_fn()
-        df = pd.read_sql(self._query, con=db_connection)
+        df = pd.read_sql(self._query, con=self._databricks_connection_fn())
         return df
 
     def as_instrument_map(self) -> dict:
