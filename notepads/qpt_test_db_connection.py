@@ -109,7 +109,7 @@ GET_CLIENT_EOD_TRADING_BALANCES = """
 SELECT * FROM (
    SELECT
         a.Account, a.Balance, a.BalanceType, UPPER(a.Currency) as Currency, 
-        IsNull(b.TableName, '') as Source, FORMAT(a.Date_UTC,'yyyyMMdd') as Timestamp, a.AsOf_UTC as Timestamp_Native
+        b.TableName as Source, FORMAT(a.Date_UTC,'yyyyMMdd') as Timestamp, a.AsOf_UTC as Timestamp_Native
    FROM 
        Operations.balances.EndOfDay_00UTC A 
        LEFT JOIN Operations.balances.sources B on a.Account = b.Account
