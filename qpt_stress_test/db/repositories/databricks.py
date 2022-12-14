@@ -415,53 +415,6 @@ GET_EXCHANGE_BALANCES_BEFORE_TIMESTAMP = """
 """
 
 
-class SqlQuery:
-    
-    def __init__(self, query: str, *params, db_connector_factory=None):
-        self._query = query.format(*params)
-        self._params = params
-        self._spark = db_connector_factory
-
-    def as_dataframe(self):
-        df = self._spark.sql(self._query)
-        return df
-
-    def as_instrument_map(self) -> dict:
-        with self.db_cursor() as cursor:
-            cursor.execute(self._query)
-            rs = cursor.fetchall()
-            column_names = [col[0] for col in cursor.description]
-            map = {
-                (row.instrument if "instrument" in column_names else row.symbol_bfc).upper(): {
-                    column[0]: value
-                    for column, value in zip(cursor.description, row)
-                }
-                for row in rs
-            }     
-        return map
-
-    def as_map(self) -> dict:
-        with self.db_cursor() as cursor:
-            cursor.execute(self._query)
-            rs = cursor.fetchall()
-            rs_as_map = {
-                idx: {
-                    column[0]: value
-                    for column, value in zip(cursor.description, row)
-                }
-                for idx, row in enumerate(rs)
-            }     
-        return rs_as_map
-
-    def as_list(self) -> tuple:
-        with self.db_cursor() as cursor:
-            cursor.execute(self._query)
-            rs = cursor.fetchall()
-            columns = [column[0] for column in cursor.description]
-            data = [[value for value in row] for row in rs]
-        return columns, data
-
-
 class TradingRepository:
 
     def __init__(self, sql_query_driver, db_connector_factory=None):
@@ -470,10 +423,8 @@ class TradingRepository:
         self._spark = sql_query_driver
 
     def adhoc_query(self, sql: str):
-        #return self._sql_query_class(sql, db_connector_factory=self._db_connector_factory)
-        return SqlQuery(sql, databricks_connection_fn=self._spark) #gdt_cluster_connection)
-        return self._spark.sql()
-    
+        return self._sql_query_class(sql, db_connector_factory=self._db_connector_factory)
+
     @property
     def last_positions_date(self) -> dt.date:
         _, data = self._sql_query_class(
@@ -482,18 +433,15 @@ class TradingRepository:
         return data[0][0].date()
 
     def get_client_eod_trading_balances(self, trade_date, clients, accounts):
-        #return self._sql_query_class(
-        #    GET_CLIENT_EOD_TRADING_BALANCES.format(trade_date=trade_date, clients=tuple(clients), accounts=tuple(accounts)), 
-        #    db_connector_factory=self._db_connector_factory)
-        return SqlQuery(GET_CLIENT_EOD_TRADING_BALANCES.format(trade_date=trade_date, clients=tuple(clients), accounts=tuple(accounts)), 
-                        db_connector_factory=self._spark)
+        return self._sql_query_class(
+            GET_CLIENT_EOD_TRADING_BALANCES.format(trade_date=trade_date, clients=tuple(clients), accounts=tuple(accounts)), 
+            db_connector_factory=self._db_connector_factory)
 
     def get_exchange_balances(self, asof_utc_timestamp: dt.datetime):
         """ """
         db_timestamp = asof_utc_timestamp.astimezone(ChicagoTimeZone)
-        exchange_balance_sql = GET_EXCHANGE_BALANCES_BEFORE_TIMESTAMP.format(
-          from_ts=db_timestamp - dt.timedelta(minutes=180),
-          to_ts=db_timestamp + dt.timedelta(minutes=5))
+        exchange_balance_sql = GET_EXCHANGE_BALANCES_BEFORE_TIMESTAMP.format(db_timestamp + dt.timedelta(minutes=30),
+                                                                             db_timestamp)
         return self._sql_query_class(
             exchange_balance_sql, 
             db_connector_factory=self._db_connector_factory)
