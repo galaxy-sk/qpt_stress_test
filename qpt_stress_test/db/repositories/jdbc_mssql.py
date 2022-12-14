@@ -160,9 +160,9 @@ class TradingRepository:
 
 
     def __init__(self, sql_query_driver, db_connector_factory):
-        self._sql_query_class = SqlQuery
-        self._db_connector_factory = qpt_sqlsvr_connection
-    
+        self._sql_query_class = sql_query_driver    # SqlQuery
+        self._db_connector_factory = db_connector_factory  # qpt_sqlsvr_connection
+
     def adhoc_query(self, sql: str) -> SqlQueryInterface:
         return self._sql_query_class(
             sql, 
@@ -227,3 +227,4 @@ class MarketDataRepository:
         return self._sql_query_class(
             GET_TRADING_CLOSE_MARKS.format(close_date=close_date),
             db_connector_factory=self._db_connector_factory)
+
