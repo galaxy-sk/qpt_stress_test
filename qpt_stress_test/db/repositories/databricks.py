@@ -4,10 +4,145 @@
 """
 import datetime as dt
 
-from .drivers.databricks_sql import SqlQuery
-from ..tasks import gdt_cluster_connection
+#from .drivers.databricks_sql import SqlQuery
+#from ..tasks import gdt_cluster_connection
 from qpt_stress_test.core.config import ChicagoTimeZone
 
+GET_CLIENT_EOD_TRADING_BALANCES = """
+    SELECT * 
+    FROM qpt.trading_balances_eod 
+    WHERE client in {clients} AND Account IN {accounts} AND TradeDate = '{trade_date:%Y-%m-%d}'
+    ORDER BY TradeDate DESC, client, symbol, product;
+"""
+
+GET_EOD_SPOT_POSITIONS = """
+    SELECT
+         eod.TradeDate, eod.EndPoint, Account, eod.Symbol, sum(eodposition / qty_multiplier) as position, 0 as notional, 0 as mark, 0 as unrealised_pnl, 
+         instrument_type, expiration_time, is_linear, 
+         CASE WHEN currency_position is NULL or currency_position = "" THEN currency_settlement ELSE currency_position END AS underlying, qty_multiplier
+    FROM 
+        qpt.trading_balances_eod eod 
+        LEFT JOIN qpt.crypto_instrument_reference i ON i.symbol_bfc = eod.Symbol AND i.endpoint = eod.Endpoint
+    WHERE 
+        eod.TradeDate = '{0}' 
+        AND (expiration_time IS NULL OR expiration_time > '{0}') 
+        AND i.instrument_type not in ('FUTURE', 'SWAP')
+    GROUP BY 
+        TradeDate, eod.EndPoint, Account, eod.Symbol, i.instrument_type, currency_position, currency_settlement, expiration_time, is_linear , qty_multiplier
+    HAVING           
+        sum(eodposition) <> 0 
+    ORDER BY 
+        TradeDate DESC, eod.EndPoint, Account, eod.Symbol ;
+"""
+
+GET_EOD_DERIV_POSITIONS = """
+    SELECT
+         eod.TradeDate, eod.EndPoint, Account, eod.Symbol, sum(eodposition / qty_multiplier) AS position, 0 as notional, 0 as mark, 0 as unrealised_pnl, 
+         instrument_type, expiration_time, is_linear, 
+         CASE WHEN currency_position is NULL or currency_position = "" THEN currency_settlement ELSE currency_position END AS underlying , qty_multiplier
+    FROM 
+        qpt.trading_balances_eod eod 
+        LEFT JOIN qpt.crypto_instrument_reference i ON i.symbol_bfc = eod.Symbol AND i.endpoint = eod.Endpoint
+    WHERE 
+        eod.TradeDate = '{0}' 
+        AND (expiration_time IS NULL OR expiration_time > '{0}')
+        AND i.instrument_type in ('FUTURE', 'SWAP')
+    GROUP BY 
+        TradeDate, eod.EndPoint, Account, eod.Symbol, i.instrument_type, currency_position, currency_settlement, expiration_time, is_linear , qty_multiplier
+    HAVING           
+        sum(eodposition) <> 0 
+    ORDER BY 
+        TradeDate DESC, eod.EndPoint, Account, eod.Symbol ;
+"""
+
+GET_EOD_POSITIONS = """
+    SELECT
+         eod.TradeDate, eod.EndPoint, Account, eod.Symbol, sum(eodposition / qty_multiplier) as position, 0 as notional, 0 as mark, 0 as unrealised_pnl, 
+         instrument_type, expiration_time, is_linear, 
+         CASE WHEN currency_position is NULL or currency_position = "" THEN currency_settlement ELSE currency_position END AS underlying
+    FROM 
+        qpt.trading_balances_eod eod 
+        LEFT JOIN qpt.crypto_instrument_reference i ON i.symbol_bfc = eod.Symbol AND i.endpoint = eod.Endpoint
+    WHERE 
+        eod.TradeDate = '{0}' 
+        AND (expiration_time IS NULL OR expiration_time > '{0}')
+    GROUP BY 
+        TradeDate, eod.EndPoint, Account, eod.Symbol, i.instrument_type, currency_position, currency_settlement, expiration_time, is_linear , qty_multiplier
+    HAVING           
+        sum(eodposition) <> 0 
+    ORDER BY 
+        TradeDate DESC, eod.EndPoint, Account, eod.Symbol ;
+"""
+
+GET_BACKTEST_SYMBOLS = """
+    WITH SYMBOL_SET AS (
+        SELECT eod.EndPoint, eod.Symbol FROM  qpt.trading_balances_eod eod LEFT JOIN qpt.crypto_instrument_reference i ON i.symbol_bfc = eod.Symbol AND i.endpoint = eod.Endpoint 
+        WHERE TradeDate = '{0}' AND (expiration_time IS NULL OR expiration_time > '{0}') 
+        GROUP BY eod.EndPoint, eod.Symbol HAVING sum(eodposition) <> 0 
+    )
+    SELECT 
+         ss.Endpoint, ss.Symbol as symbol_bfc, i.id, i.exchange, i.symbol_exch, i.symbol_root, i.instrument_type, 
+         i.future_type, i.gateway_security_type, i.expiration_time, i.is_linear, i.is_active, i.currency_position, i.currency_quote, 
+         i.currency_settlement, i.currency_index, i.contract_size, i.tick_size, i.maximal_order_qty, i.qty_multiplier 
+    FROM 
+        SYMBOL_SET ss 
+        LEFT JOIN  qpt.crypto_instrument_reference i ON i.symbol_bfc = ss.Symbol AND i.endpoint = ss.Endpoint 
+    ORDER BY 
+        ss.Endpoint, ss.Symbol ;
+"""
+
+GET_BACKTEST_SPOT_MARKS = """
+    WITH SYMBOL_SET AS (
+        SELECT eod.EndPoint, eod.Symbol FROM  qpt.trading_balances_eod eod LEFT JOIN qpt.crypto_instrument_reference i ON i.symbol_bfc = eod.Symbol AND i.endpoint = eod.Endpoint 
+        WHERE TradeDate = '2022-10-11T00:00:00.000+0000' AND (expiration_time IS NULL OR expiration_time > '2022-10-11T00:00:00.000+0000') 
+        GROUP BY eod.EndPoint, eod.Symbol HAVING sum(eodposition) <> 0
+    )
+    SELECT
+         mark.TradeDate, mark.Exchange, mark.Symbol, mark.ClosingPrice
+    FROM 
+        SYMBOL_SET ss 
+        LEFT JOIN qpt.mark_settle_eod mark ON mark.symbol = ss.Symbol AND mark.Exchange = ss.Endpoint 
+        LEFT JOIN qpt.crypto_instrument_reference i ON i.symbol_bfc = ss.Symbol AND i.endpoint = ss.Endpoint
+    WHERE 
+        mark.TradeDate >= '20200101' AND mark.TradeDate <= '20221011' AND i.instrument_type not in ('FUTURE', 'SWAP')
+    ORDER BY 
+        mark.TradeDate DESC, mark.Exchange, mark.Symbol ;
+"""
+
+GET_BACKTEST_DERIV_MARKS = """
+    WITH SYMBOL_SET AS (
+        SELECT eod.EndPoint, eod.Symbol FROM  qpt.trading_balances_eod eod LEFT JOIN qpt.crypto_instrument_reference i ON i.symbol_bfc = eod.Symbol AND i.endpoint = eod.Endpoint 
+        WHERE TradeDate = '2022-10-11T00:00:00.000+0000' AND (expiration_time IS NULL OR expiration_time > '2022-10-11T00:00:00.000+0000') 
+        GROUP BY eod.EndPoint, eod.Symbol HAVING sum(eodposition) <> 0
+    )
+    SELECT 
+         mark.TradeDate, mark.Exchange, mark.Symbol, mark.ClosingPrice 
+    FROM 
+        SYMBOL_SET ss 
+        LEFT JOIN qpt.mark_settle_eod mark ON mark.symbol = ss.Symbol AND mark.Exchange = ss.Endpoint 
+        LEFT JOIN qpt.crypto_instrument_reference i ON i.symbol_bfc = ss.Symbol AND i.endpoint = ss.Endpoint 
+    WHERE 
+        mark.TradeDate >= '20200101' AND mark.TradeDate <= '20221011' AND i.instrument_type in ('FUTURE', 'SWAP') 
+    ORDER BY 
+        mark.TradeDate DESC, mark.Exchange, mark.Symbol ;
+"""
+
+GET_CRYPTO_BACKFILL_POSITIONS = """
+    WITH CASH as (
+      select Endpoint, symbol, sum(case when side = 'S' then -LastFillQuantity / 1e9 else LastFillQuantity/1e9 end) AS Position 
+      from qpt.crypto_backfill 
+      where Account in ('{2}') 
+        and Endpoint in ('{1}') 
+        and YYYYMMDD <= '{0}' 
+      group by Endpoint, Symbol) 
+    SELECT 
+        CASH.*, 
+        MARK.*  
+    FROM 
+        CASH LEFT JOIN  
+        qpt.mark_settle_eod MARK ON CASH.Symbol = MARK.Symbol AND Cash.EndPoint = MARK.Exchange AND MARK.TradeDate = '{0}' 
+    ORDER BY Cash.Endpoint, Cash.Symbol ;
+"""
 
 GET_CME_POSITIONS = """
     WITH Symbols([Contract], Exchange, Multiplier, SecurityType, Expiration, CurrencyCode) AS (
@@ -260,19 +395,69 @@ GET_EXCHANGE_BALANCES_BEFORE_TIMESTAMP = """
   FROM qpt.okex_2_s2_account_balance WHERE AsOf     BETWEEN '{0:%Y-%m-%d %H:%M:%S}' AND '{1:%Y-%m-%d %H:%M:%S}';
 """
 
+class SqlQuery:
+    
+    def __init__(self, query: str, *params, db_connector_factory=None):
+        self._query = query.format(*params)
+        self._params = params
+        self._spark = db_connector_factory
+
+    def as_dataframe(self):
+        df = self._spark.sql(self._query)
+        return df
+
+    def as_instrument_map(self) -> dict:
+        with self.db_cursor() as cursor:
+            cursor.execute(self._query)
+            rs = cursor.fetchall()
+            column_names = [col[0] for col in cursor.description]
+            map = {
+                (row.instrument if "instrument" in column_names else row.symbol_bfc).upper(): {
+                    column[0]: value
+                    for column, value in zip(cursor.description, row)
+                }
+                for row in rs
+            }     
+        return map
+
+    def as_map(self) -> dict:
+        with self.db_cursor() as cursor:
+            cursor.execute(self._query)
+            rs = cursor.fetchall()
+            rs_as_map = {
+                idx: {
+                    column[0]: value
+                    for column, value in zip(cursor.description, row)
+                }
+                for idx, row in enumerate(rs)
+            }     
+        return rs_as_map
+
+    def as_list(self) -> tuple:
+        with self.db_cursor() as cursor:
+            cursor.execute(self._query)
+            rs = cursor.fetchall()
+            columns = [column[0] for column in cursor.description]
+            data = [[value for value in row] for row in rs]
+        return columns, data
 
 class TradingRepository:
 
-    def __init__(self):
-        pass
+    def __init__(self, sparksession):
+        self._spark = sparksession
     
     def adhoc_query(self, sql: str) -> SqlQuery:
         return SqlQuery(sql, databricks_connection_fn=gdt_cluster_connection)
-
+        return self._spark.sql()
+    
     @property
     def last_positions_date(self) -> dt.date:
         _, data = SqlQuery(GET_LAST_TRADING_BALANCES_EOD_TRADEDATE, databricks_connection_fn=gdt_cluster_connection).as_list()
         return data[0][0].date()
+
+    def get_client_eod_trading_balances(self, trade_date, clients, accounts):
+        return SqlQuery(GET_CLIENT_EOD_TRADING_BALANCES.format(trade_date=trade_date, clients=tuple(clients), accounts=tuple(accounts)), 
+                        db_connector_factory=self._spark)
 
     def get_exchange_balances(self, asof_utc_timestamp: dt.datetime):
         """ """
