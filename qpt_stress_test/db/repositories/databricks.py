@@ -5,8 +5,8 @@
 import datetime as dt
 
 #from .drivers.databricks_sql import SqlQuery
-#from ..tasks import gdt_cluster_connection
 from qpt_stress_test.core.config import ChicagoTimeZone
+from qpt_stress_test.db.tasks import gdt_cluster_databricks_connection_factory
 
 GET_CLIENT_EOD_TRADING_BALANCES = """
     SELECT * 
@@ -445,14 +445,14 @@ class TradingRepository:
 
     def __init__(self, sparksession):
         self._spark = sparksession
-    
     def adhoc_query(self, sql: str) -> SqlQuery:
-        return SqlQuery(sql, databricks_connection_fn=gdt_cluster_connection)
-        return self._spark.sql()
+        return SqlQuery(sql)
     
     @property
     def last_positions_date(self) -> dt.date:
-        _, data = SqlQuery(GET_LAST_TRADING_BALANCES_EOD_TRADEDATE, databricks_connection_fn=gdt_cluster_connection).as_list()
+        _, data = self._sql_query_class(
+            GET_LAST_TRADING_BALANCES_EOD_TRADEDATE, 
+            db_connector_factory=self._db_connector_factory).as_list()
         return data[0][0].date()
 
     def get_client_eod_trading_balances(self, trade_date, clients, accounts):
@@ -464,11 +464,14 @@ class TradingRepository:
         db_timestamp = asof_utc_timestamp.astimezone(ChicagoTimeZone)
         exchange_balance_sql = GET_EXCHANGE_BALANCES_BEFORE_TIMESTAMP.format(db_timestamp + dt.timedelta(minutes=30),
                                                                              db_timestamp)
-        return SqlQuery(exchange_balance_sql, databricks_connection_fn=gdt_cluster_connection)
+        return self._sql_query_class(
+            exchange_balance_sql, 
+            db_connector_factory=self._db_connector_factory)
 
     def get_cme_positions(self, at_dtt_utc: dt.datetime) -> SqlQuery:
         # maybe work out from trade list when we actually started trading this instrument
-        return SqlQuery(GET_CME_POSITIONS,
-                        at_dtt_utc.astimezone(ChicagoTimeZone).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
-                        at_dtt_utc.date().strftime('%Y-%m-%d'),
-                        databricks_connection_fn=gdt_cluster_connection)
+        return self._sql_query_class(
+            GET_CME_POSITIONS,
+            at_dtt_utc.astimezone(ChicagoTimeZone).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
+            at_dtt_utc.date().strftime('%Y-%m-%d'),
+            db_connector_factory=self._db_connector_factory)

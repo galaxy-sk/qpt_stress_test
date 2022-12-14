@@ -6,6 +6,7 @@ import qpt_stress_test.db.repositories.databricks as databricks
 import qpt_stress_test.db.repositories.qpt_mssql as qpt_mssql
 import qpt_stress_test.db.repositories.qpt_pg as qpt_pg
 from qpt_historic_pos.impl.utils.times import UtcTimeZone
+from qpt_stress_test.db.tasks import gdt_cluster_databricks_connection_factory
 
 
 class TestQptPgRepo:
@@ -24,7 +25,7 @@ class TestQptPgRepo:
         # Assert
         assert not df.empty
 
-    def test_qfl_pg_crypto_positions(self):
+    def test_qfl_pg_crypto_active_contracts(self):
         # Arrange
         qpt_pg_reference_repo = qpt_pg.ReferenceRepository()
         from_dt = dt.date.today()
@@ -166,7 +167,7 @@ class TestDatabricksRepo:
 
     def test_databricks_adhoc_query(self):
         # Arrange
-        repo = databricks.TradingRepository()
+        repo = databricks.TradingRepository(gdt_cluster_databricks_connection_factory)
         sql = "SELECT Max(TradeDate) as last_date FROM qpt.trading_balances_eod txn;"
         
         # Act

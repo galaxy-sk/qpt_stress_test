@@ -5,7 +5,7 @@
 import datetime as dt
 
 from .drivers.clickhouse import SqlQuery
-from ..tasks import clickhouse_client
+from ..tasks import clickhouse_driver_client_factory
 from qpt_stress_test.core.config import ChicagoTimeZone
 
 
@@ -31,11 +31,11 @@ class TradingRepository:
         pass
     
     def adhoc_query(self, sql: str) -> SqlQuery:
-        return SqlQuery(sql, databricks_connection_fn=clickhouse_client)
+        return SqlQuery(sql, db_connector_factory=clickhouse_driver_client_factory)
 
     @property
     def last_positions_date(self) -> dt.date:
-        _, data = SqlQuery(GET_LAST_TRADING_BALANCES_EOD_TRADEDATE, databricks_connection_fn=clickhouse_client).as_list()
+        _, data = SqlQuery(GET_LAST_TRADING_BALANCES_EOD_TRADEDATE, db_connector_factory=clickhouse_driver_client_factory).as_list()
         return data[0][0].date()
 
     def get_cme_positions(self, at_dtt_utc: dt.datetime) -> SqlQuery:
@@ -43,4 +43,4 @@ class TradingRepository:
         return SqlQuery(GET_CME_MARK_PRICES, 
                         at_dtt_utc.astimezone(ChicagoTimeZone).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
                         at_dtt_utc.date().strftime('%Y-%m-%d'),
-                        databricks_connection_fn=clickhouse_client)
+                        db_connector_factory=clickhouse_driver_client_factory)

@@ -5,9 +5,9 @@
 import datetime as dt
 
 from .drivers.sqlalchemy import SqlQuery
-from ..tasks import bfc_rds_pg_engine
+from ..tasks import bfc_rds_sqlalchemy_engine_factory
 
-"""pg_conn = db_tasks.bfc_rds_pg_engine()
+"""pg_conn = db_tasks.bfc_rds_sqlalchemy_engine_factory()
 sql = (
         "select "
         "   symbol_bfc as instrument, "
@@ -26,6 +26,16 @@ df = pd.read_sql(sql, con=pg_conn)
 """
 GET_LAST_TRADING_BALANCES_EOD_TRADEDATE = "SELECT Max(snapshot_time) as last_snapshot_time FROM rms.exchange_position_snapshot;"
 
+GET_NET_OPEN_POSITIONS_SNAPSHOT = """
+    select t1.exchange, t1.account, t1.snapshot_time, t1.long_positions_notional, t1.short_positions_notional, t1.long_positions, t1.short_positions, t1.mark_prices, t1.long_unrealized_pnls, t1.short_unrealized_pnls
+    from rms.exchange_position_snapshot t1
+        inner join (
+            select account, min(snapshot_time) as min_time
+            from rms.exchange_position_snapshot
+            where snapshot_time between '{asof_start:%Y-%m-%d %H:%M:%S.000}' and '{asof_end:%Y-%m-%d %H:%M:%S.000}'
+            group by account) t2 on t1.account = t2.account and t1.snapshot_time = t2.min_time
+"""
+from .drivers.sqlalchemy import SqlQuery
 #snapshot_time, 
 #    t1.long_positions_notional, t1.short_positions_notional, t1.long_positions, t1.short_positions,
 #    t1.mark_prices, t1.long_unrealized_pnls, t1.short_unrealized_pnls
@@ -33,20 +43,26 @@ GET_LAST_TRADING_BALANCES_EOD_TRADEDATE = "SELECT Max(snapshot_time) as last_sna
 
 class TradingRepository:
 
-    def __init__(self):
-        pass
+    def __init__(self, sql_query_driver=None, db_connector_factory=None):
+        self._sql_query_class = sql_query_driver or SqlQuery
+        self._db_connector_factory = db_connector_factory or bfc_rds_sqlalchemy_engine_factory
     
     def adhoc_query(self, sql: str) -> SqlQuery:
-        return SqlQuery(sql, sqlalchemy_engine_fn=bfc_rds_pg_engine)
+        return self._sql_query_class(
+            sql, 
+            db_connector_factory=self._db_connector_factory)
 
-    @property
     def last_positions_date(self) -> dt.date:
-        _, data = SqlQuery(GET_LAST_TRADING_BALANCES_EOD_TRADEDATE, sqlalchemy_engine_fn=bfc_rds_pg_engine).as_list()
+        _, data = self._sql_query_class(
+            GET_LAST_TRADING_BALANCES_EOD_TRADEDATE, 
+            db_connector_factory=self._db_connector_factory).as_list()
         return data[0][0].date()
 
     def get_spot_definitions(self) -> SqlQuery:
         # maybe work out from trade list when we actually started tradeing this instrument 
-        return SqlQuery(GET_SPOT_CONTRACTS, sqlalchemy_engine_fn=bfc_rds_pg_engine)
+        return self._sql_query_class(
+            GET_SPOT_CONTRACTS, 
+            db_connector_factory=self._db_connector_factory)
 
 
 # Table columns:
@@ -117,9 +133,17 @@ GET_CONTRACT_DETAILS = """
 
 class ReferenceRepository:
 
+    def __init__(self, sql_query_driver=None, db_connector_factory=None):
+        self._sql_query_class = sql_query_driver or SqlQuery
+        self._db_connector_factory = db_connector_factory or bfc_rds_sqlalchemy_engine_factory
+    
     def get_active_contracts(self, from_dt: dt.date) -> SqlQuery:
         # maybe work out from trade list when we actually started tradeing this instrument 
-        return SqlQuery(GET_ACTIVE_CONTRACTS, from_dt, sqlalchemy_engine_fn=bfc_rds_pg_engine)
+        return self._sql_query_class(
+            GET_ACTIVE_CONTRACTS, from_dt, 
+            db_connector_factory=self._db_connector_factory)
 
     def get_instruments_details(self, symbol_bfcs: list) -> SqlQuery:
-        return SqlQuery(GET_CONTRACT_DETAILS.format(symbols=tuple(symbol_bfcs)), sqlalchemy_engine_fn=bfc_rds_pg_engine)
+        return self._sql_query_class(
+            GET_CONTRACT_DETAILS.format(symbols=tuple(symbol_bfcs)), 
+            db_connector_factory=self._db_connector_factory)

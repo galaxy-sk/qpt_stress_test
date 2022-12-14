@@ -108,6 +108,10 @@ account_map = {
     "DEFI-STRAT-2": {"Account": "DEFI-STRAT-2", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "DEFI"},
     "DEFI-STRAT-3": {"Account": "DEFI-STRAT-3", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "DEFI"},
     "DEFI-STRAT-4": {"Account": "DEFI-STRAT-4", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "DEFI"},
+    "DEFI-STRAT-5": {"Account": "DEFI-STRAT-5", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "DEFI"},
+    "DEFI-STRAT-6": {"Account": "DEFI-STRAT-6", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "DEFI"},
+    "GATE-1-M-C": {"Account": "GATE-1-M-C", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "GATE"},
+    "GATE-1-M-PT": {"Account": "GATE-1-M-PT", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "GATE"},
 }
 
 endpoint_map = {
@@ -141,24 +145,25 @@ endpoint_map = {
 }
 
 
+def get_bank_balances_with_fallback(get_date: dt.date):
+    bank_today = get_date
+    bmo_df, slv_cash, sig_cash = get_bank_balances(bank_today)
+    while bmo_df is None:
+        bank_today = bank_today - dt.timedelta(days=1)
+        bmo_df, slv_cash, sig_cash = get_bank_balances(bank_today)
+
+    if bank_today != get_date:
+        print(f'using old cash data from {bank_today:%Y-%m-%d} for {get_date:%Y-%m-%d}')
+        df = bmo_df.reset_index()
+        df['trade_date'] = f'{get_date:%Y%m%d}'
+        df.set_index(['trade_date', 'currency'], inplace=True)
+        bmo_df = df
+
+    return bmo_df, slv_cash, sig_cash
+
+
 def generate_daily_nav_00utc(nav_date: dt.date = None) -> tuple:
     """ The logic of this code comes from Bovas' generate_daily_nav_00utc.ipynb notebook """
-
-    def get_bank_balances_with_fallback(get_date: dt.date):
-        bank_today = get_date
-        bmo_df, slv_cash, sig_cash = get_bank_balances(bank_today)
-        while bmo_df is None:
-            bank_today = bank_today - dt.timedelta(days=1)
-            bmo_df, slv_cash, sig_cash = get_bank_balances(bank_today)
-
-        if bank_today != get_date:
-            print(f'using old cash data from {bank_today:%Y-%m-%d} for {get_date:%Y-%m-%d}')
-            df = bmo_df.reset_index()
-            df['trade_date'] = f'{nav_date:%Y%m%d}'
-            df.set_index(['trade_date', 'currency'], inplace=True)
-            bmo_df = df
-
-        return bmo_df, slv_cash, sig_cash
 
     # Start with yesterday's data: more likely this exists
     yesterday = nav_date - dt.timedelta(days=1)
@@ -166,7 +171,7 @@ def generate_daily_nav_00utc(nav_date: dt.date = None) -> tuple:
     yd_assets_df = get_assets(yesterday, exchanges_balance_accounts, yd_marks_df)
     yd_loans_df = get_loans(yesterday, loans_accounts, yd_marks_df)
     yd_edf_cash = get_edf_cash(yesterday, fileloc=datlib_loc)
-    yd_bmo_df, yd_slv_cash, yd_sig_cash = get_bank_balances(yesterday)
+    yd_bmo_df, yd_slv_cash, yd_sig_cash = get_bank_balances_with_fallback(yesterday)
     yd = {
         "day": yesterday,
         'marks': yd_marks_df,
@@ -258,6 +263,16 @@ def summary_exchange_balances_00utc(nav_date, assets_df, loans_df, summary):
         })], ignore_index=True)
 
     balances_df[''] = ''
+
+    # Check that BOVAS accounts have a mapping entry
+    unconfigured_accounts = [account for account in balances_df['Account'] if account not in account_map]
+    if unconfigured_accounts:
+        print("These accounts need to be added to account_map")
+        for account in unconfigured_accounts:
+            print(account)
+            account_map[account] = {'TYPE': 'UNKNOWN', 'Endpoint': account.split("-")[0]}
+        print()
+
     balances_df['REFERENCE 1'] = [
         f"{account_map[account]['TYPE']}{account_map[account]['Endpoint']}{account_map[account]['TYPE']}{currency}" 
         for account, currency in zip(balances_df['Account'], balances_df['Currency'])]
@@ -287,6 +302,7 @@ def summary_asset_loans_cash(summary_exchange_balances_df: pd.DataFrame) -> pd.D
             return "ASSET"
         return account_type
 
+    asset_loans_cash_df["utc_timestamp"] = summary_exchange_balances_df["Timestamp_Native"]
     asset_loans_cash_df["exchange"] = [
         endpoint_map[endpoint]['exchange']
         for endpoint in summary_exchange_balances_df["Endpoint"]]
@@ -315,20 +331,17 @@ def summary_asset_loans_cash(summary_exchange_balances_df: pd.DataFrame) -> pd.D
     return asset_loans_cash_df
 
 
-def generate_reports(eod_date: dt.date, db_chicago_datetime: dt.datetime, trading_repo, marketdata_repo=None):
-
-    report_utc_datetime = db_chicago_datetime.astimezone(UtcTimeZone)
-
-    # Run a facsimile of the Bovas NAV report
-    assets_df, loans_df, summary = generate_daily_nav_00utc(eod_date)
-    summary_exchange_balances_df = summary_exchange_balances_00utc(eod_date, assets_df, loans_df, summary)
-
+def net_open_positions(report_utc_datetime, trading_repo):
     # Run Bowan's net_open_positions_report
+    db_chicago_datetime = report_utc_datetime.astimezone(ChicagoTimeZone)
     net_open_position_report_df = gen_open_position_report(db_chicago_datetime)
 
-    # Get the CME positions directly from the MSSQL
-    # columns = ['instrument','exchange','account','position','notional','price','unrealized_pnl','instrument_type',
-    #            'expiration_time','is_linear','underlying','EntryCost']
+    # Add in timestamp
+    columns = ['utc_timestamp'] + list(net_open_position_report_df.columns)
+    net_open_position_report_df['utc_timestamp'] = report_utc_datetime.replace(tzinfo=None)
+    net_open_position_report_df = net_open_position_report_df[columns]
+
+    # Get the CME positions directly from the MSSQL; over weekends, walk backward to get data from past date
     cme_rollback = 0
     cme_df = trading_repo.get_cme_positions(report_utc_datetime).as_dataframe()
     while cme_df.empty and cme_rollback < 4:
@@ -338,8 +351,14 @@ def generate_reports(eod_date: dt.date, db_chicago_datetime: dt.datetime, tradin
         print(f"Taking CME positions from {report_utc_datetime - dt.timedelta(days=cme_rollback):%Y-%m-%d}")
     if cme_df.empty:
         print(f"No CME positions from {report_utc_datetime - dt.timedelta(days=cme_rollback):%Y-%m-%d}")
-    
-    cme_positions = { col_name: [] for col_name in cme_df.columns}
+
+    # Add in real as-of timestamp
+    cme_df['utc_timestamp'] = report_utc_datetime.replace(tzinfo=None) - dt.timedelta(days=cme_rollback)
+
+    # Remap and transform into a dictionary: {column_name: [values]}
+    # df columns ['instrument','exchange','account','position','notional','price','unrealized_pnl','instrument_type',
+    #             'expiration_time','is_linear','underlying','EntryCost', 'utc_timestamp']
+    cme_positions = {col_name: [] for col_name in cme_df.columns}
     for idx, rs in cme_df.iterrows():
         for column in cme_df.columns:
             cme_positions[column].append(rs[column])
@@ -349,8 +368,19 @@ def generate_reports(eod_date: dt.date, db_chicago_datetime: dt.datetime, tradin
         if col not in net_open_position_report_df.columns:
             cme_positions.pop(col)
 
-    net_open_position_report_df = pd.concat([net_open_position_report_df, pd.DataFrame.from_dict(cme_positions)], 
-                                            ignore_index=True)
+    # Create cme dataframe, rearrange columns to math net open positions, and concat
+    cme_df = pd.DataFrame.from_dict(cme_positions)
+    # cme_df = cme_df[[net_open_position_report_df.columns]]
+    return pd.concat([net_open_position_report_df, cme_df], ignore_index=True)
+
+
+def generate_reports(eod_date: dt.date, report_utc_datetime: dt.datetime, trading_repo, marketdata_repo=None):
+
+    net_open_position_report_df = net_open_positions(report_utc_datetime, trading_repo)
+
+    # Run a facsimile of the Bovas NAV report
+    assets_df, loans_df, summary = generate_daily_nav_00utc(eod_date)
+    summary_exchange_balances_df = summary_exchange_balances_00utc(eod_date, assets_df, loans_df, summary)
 
     # Reformat into format to combine nav & deriv positions
     asset_loans_cash_df = summary_asset_loans_cash(summary_exchange_balances_df)
@@ -378,7 +408,7 @@ def generate_reports(eod_date: dt.date, db_chicago_datetime: dt.datetime, tradin
 def run(run_as_eod: bool):
 
     if run_as_eod:
-        eod_date = dt.date(2022, 12, 5)
+        eod_date = dt.date.today() - dt.timedelta(days=1)
         db_datetime = dt.datetime.combine(eod_date, dt.time(hour=16, minute=0, second=0))
         db_chicago_datetime = ChicagoTimeZone.localize(db_datetime)
     else:
@@ -387,15 +417,15 @@ def run(run_as_eod: bool):
         eod_date = report_date - dt.timedelta(days=1)
         db_chicago_datetime = dt.datetime.now().astimezone(ChicagoTimeZone)
 
+    db_utc_datetime = db_chicago_datetime.astimezone(UtcTimeZone)
     (
         net_open_position_report_df,
         summary_exchange_balances_df,
         asset_loans_cash_df,
         asset_and_open_positions_df
-    ) = generate_reports(eod_date, db_chicago_datetime, trading_repo=qpt_mssql.TradingRepository())
+    ) = generate_reports(eod_date, db_utc_datetime, trading_repo=qpt_mssql.TradingRepository())
 
     # Dump to file
-    db_utc_datetime = db_chicago_datetime.astimezone(UtcTimeZone)
     net_open_position_report_df.to_csv(f"{db_utc_datetime:%Y-%m-%d_%H%M%S}_net_open_positions.csv", sep=',')
     summary_exchange_balances_df.to_csv(f"{eod_date:%Y-%m-%d}_summary_exchange_balances_00utc.csv", sep=',')
     asset_and_open_positions_df.to_csv(f"{db_utc_datetime:%Y-%m-%d_%H%M%S}_asset_and_open_positions.csv", sep=',')
