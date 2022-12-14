@@ -7,7 +7,7 @@ from .drivers.interfaces import SqlQueryInterface
 # self._sql_query_class = SqlQuery
 # self._db_connector_factory = qpt_sqlsvr_connectionfrom .drivers.jdbc 
 # import SqlQuery
-# from .drivers.jdbc import SqlQuery
+from .drivers.jdbc import SqlQuery
 # from ..tasks import jdbc_sqlsvr_connection
 from qpt_stress_test.core.config import ChicagoTimeZone
 
@@ -158,7 +158,6 @@ FROM trading.pnl.EOD_NEW eod WITH(NOLOCK)
 
 class TradingRepository:
 
-
     def __init__(self, sql_query_driver, db_connector_factory):
         self._sql_query_class = sql_query_driver    # SqlQuery
         self._db_connector_factory = db_connector_factory  # qpt_sqlsvr_connection
@@ -227,4 +226,3 @@ class MarketDataRepository:
         return self._sql_query_class(
             GET_TRADING_CLOSE_MARKS.format(close_date=close_date),
             db_connector_factory=self._db_connector_factory)
-
