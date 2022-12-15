@@ -1,6 +1,7 @@
 
 import qpt_stress_test.core.config as config
 
+
 def test_loading_env():
     # Arrange
 

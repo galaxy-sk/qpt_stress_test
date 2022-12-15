@@ -27,7 +27,7 @@ class SqlQuery:
 
     @contextmanager
     def db_cursor(self, *args, **kwargs):
-        with self._databricks_connection_fn() as connection:   #os.getenv("DATABRICKS_TOKEN")
+        with self._databricks_connection_factory() as connection:   #os.getenv("DATABRICKS_TOKEN")
             with connection.cursor() as cursor:
                 yield cursor
 
@@ -36,7 +36,7 @@ class SqlQuery:
             self.cursor = None
 
         def __enter__(self, *args, **kwargs):
-            self.cursor = args[0]._databricks_connection_fn().cursor()
+            self.cursor = args[0]._databricks_connection_factory().cursor()
             return self
 
         def __call__(self, func):
@@ -46,14 +46,14 @@ class SqlQuery:
             self.cursor.close()
             return False
 
-    def __init__(self, query: str, *params, databricks_connection_fn: Callable[[], databricks.sql.client.Connection] = None):
+    def __init__(self, query: str, *params, db_connector_factory: Callable[[], databricks.sql.client.Connection] = None):
         self._query = query.format(*params)
         self._params = params
-        self._databricks_connection_fn = databricks_connection_fn
+        self._databricks_connection_factory = db_connector_factory
 
 
     def as_dataframe(self):
-        db_connection=self._databricks_connection_fn()
+        db_connection=self._databricks_connection_factory()
         df = pd.read_sql(self._query, con=db_connection)
         return df
 

@@ -9,10 +9,10 @@ logger = logging.getLogger(__name__)
 
 class DatabricksSqlQuery:
 
-    def __init__(self, query: str, *params, db_conn=None, spark_session=None):
+    def __init__(self, query: str, *params, db_connector_factory=None, spark_session=None):
         self._query = query.format(*params)
         self._params = params
-        self._db_conn = db_conn
+        self._jdbc_connector_factory = db_connector_factory
         self._spark_session = spark_session
         
     def as_dataframe(self):
@@ -58,10 +58,10 @@ class DatabricksSqlQuery:
 class MsSqlQuery:
     # jdbc:sqlserver://10.17.181.234:1433;encrypt=true;trustServerCertificate=true;database=Trading; 
     # com.microsoft.sqlserver.jdbc.SQLServerDriver
-    def __init__(self, query: str, *params, spark_session=None, db_conn=None):
+    def __init__(self, query: str, *params, spark_session=None, db_connector_factory=None):
         self._query = query.format(*params)
         self._params = params
-        self._db_conn = db_conn
+        self._jdbc_connector_factory = db_connector_factory
         self._spark_session = spark_session
         
     def as_dataframe(self):
@@ -100,7 +100,7 @@ class PgSqlQuery:
     # jdbc:postgresql://bfc-rds-2.cq7gi4betiom.us-east-2.rds.amazonaws.com:5432/trading?user=xxx&password=xxx
     #  org.postgresql.Driver
 
-    def __init__(self, query: str, *params, spark_session=None, db_conn=None):
+    def __init__(self, query: str, *params, spark_session=None, db_connector_factory=None):
         self._raw_query = query
         self._params = params
         self._query = query.format(*params)

@@ -4,75 +4,47 @@
 import datetime as dt
 
 from .drivers.pyodbc import SqlQuery
-from ..tasks import qpt_sqlsvr_connection
+from ..tasks import sv_awoh_dw01_pyodbc_connection_factory
 from qpt_stress_test.core.config import ChicagoTimeZone
 
 
 GET_CME_POSITIONS = """
-    WITH Symbols([Contract], Exchange, Multiplier, SecurityType, Expiration, CurrencyCode) AS (
-        SELECT 
-            [Contract], Exchange, Multiplier, SecurityType, 
-            --  Bad data in instruments database if rs['instrument'][-2:] == 'Z2' else rs['expiration_time'],
-            CASE WHEN RIGHT([Contract], 2) = 'Z2' THEN CONVERT(DATETIME, '2022-12-30 00:00:00')
-                 ELSE Expiration END AS Expiration,
-            CurrencyCode
-        FROM 
-            Trading.dbo.products WITH(NOLOCK)
-        WHERE Exchange = 'CME'
-        AND SecurityType = 'FUTURE'
-        AND Expiration > CONVERT(DATETIME, '{0:%Y-%m-%d %H:%M:%S}')),
-
-    Marks(Symbol, Exchange, TradeDate, SettlementPrice, AsOf) AS (
-        SELECT Symbol, Exchange, TradeDate, SettlementPrice, AsOf
-        FROM trading.crypto.CMEOfficialSettlement WITH(NOLOCK)
-        WHERE Symbol in (SELECT [Contract] FROM Symbols) AND TradeDate = CONVERT(DATE, '{0:%Y-%m-%d}')),
-
-    Positions(Symbol, Account, NetQuantity, LongQuantity, ShortQuantity, LastFillPrice) AS (
-        SELECT 
-            Symbol, Account, 
-            LastFillQuantity * CASE SIDE WHEN 'S' THEN -1 ELSE 1 END  AS NetQuantity,
-            LastFillQuantity * CASE SIDE WHEN 'S' THEN 0 ELSE 1 END  AS LongQuantity,
-            LastFillQuantity * CASE SIDE WHEN 'S' THEN 1 ELSE 0 END  AS ShortQuantity,
-            LastFillPrice
-        FROM Trading.dbo.fills WITH(NOLOCK)
-        WHERE date <= '{0:%Y-%m-%d %H:%M:%S}' AND Symbol IN (SELECT [Contract] from Symbols)  AND Account = 'UNMBF222'
-        UNION ALL
-        SELECT 
-            Symbol, Account, 
-            LastFillQuantity * CASE SIDE WHEN 'S' THEN -1 ELSE 1 END  AS NetQuantity,
-            LastFillQuantity * CASE SIDE WHEN 'S' THEN 0 ELSE 1 END  AS LongQuantity,
-            LastFillQuantity * CASE SIDE WHEN 'S' THEN 1 ELSE 0 END  AS ShortQuantity,
-            LastFillPrice
-        FROM Trading.dbo.backfill WITH(NOLOCK)
-        WHERE date <= '{0:%Y-%m-%d %H:%M:%S}' AND Symbol IN (SELECT [Contract] from Symbols) AND Account = 'UNMBF222' )
-
-SELECT 
-     p.Symbol AS instrument,
-     'ED&F' AS exchange, 
-     'UNMBF222' AS account,
-     Position AS position,
-     Position * m.SettlementPrice * CASE WHEN p.Symbol LIKE 'ETH%' THEN 50
-                                         WHEN p.Symbol LIKE 'BTC%' THEN 5 ELSE 1 END AS notional,
-     m.SettlementPrice AS price,
-     (Position * m.SettlementPrice - EntryCost) * CASE WHEN p.Symbol LIKE 'ETH%' THEN 50 
-                                                       WHEN p.Symbol LIKE 'BTC%' THEN 5 ELSE 1 END AS unrealized_pnl,
-     'CME FUTURE' AS instrument_type,
-     s.Expiration  AS expiration_time, 
-     1  AS is_linear,
-     LEFT(p.Symbol,3) AS underlying,
-     EntryCost * CASE WHEN p.Symbol LIKE 'ETH%' THEN 50 WHEN p.Symbol LIKE 'BTC%' THEN 5 ELSE 1 END AS EntryCost
-FROM 
-    (SELECT 
-        Symbol,
-        SUM(NetQuantity) AS Position, 
-        SUM(LongQuantity) AS LongQuantity, 
-        SUM(ShortQuantity) AS ShortQuantity,
-        SUM(NetQuantity * LastFillPrice) AS EntryCost 
-    FROM Positions 
-    GROUP BY Symbol) p
-    JOIN Marks m ON p.Symbol = m.Symbol
-    JOIN Symbols s ON p.Symbol = s.Contract
-WHERE Position <> 0;
+    SELECT 
+        CONVERT(DATE, m.TradeDate) AS eod_date,
+        p.as_of,
+        'ED&F' AS exchange, 
+        account,
+        'CME FUTURE' AS instrument_type,
+        p.Symbol AS instrument,
+        CASE WHEN RIGHT([Contract], 2) = 'Z2' THEN CONVERT(DATETIME, '2022-12-30 00:00:00') 
+            ELSE Expiration END AS expiration_time,
+        1  AS is_linear,
+        LEFT(p.Symbol,3) AS underlying,
+        m.SettlementPrice AS price,
+        Position AS position,
+        Position * m.SettlementPrice * contract_size AS notional,
+        (Position * m.SettlementPrice - EntryCost) * contract_size AS unrealized_pnl,
+        EntryCost * contract_size AS EntryCost
+    FROM 
+        (
+            SELECT 
+                max([date]) AS as_of, Account,  Symbol, 
+                CASE WHEN Symbol LIKE 'ETH%' THEN 50 WHEN Symbol LIKE 'BTC%' THEN 5 ELSE 1 END  AS contract_size, 
+                SUM(Quantity) AS Position, 
+                SUM(Quantity * LastFillPrice) AS EntryCost 
+            FROM (
+                SELECT [date], Symbol, Account, LastFillQuantity * CASE SIDE WHEN 'S' THEN -1 ELSE 1 END  AS Quantity, LastFillPrice
+                FROM Trading.dbo.fills WITH(NOLOCK)
+                UNION ALL
+                SELECT [date], Symbol, Account, LastFillQuantity * CASE SIDE WHEN 'S' THEN -1 ELSE 1 END  AS Quantity, LastFillPrice
+                FROM Trading.dbo.backfill WITH(NOLOCK)
+            )  positions
+            WHERE [date] <= '{as_of:%Y-%m-%d %H:%M:%S}'
+            GROUP BY Account, Symbol
+        ) p
+        JOIN trading.crypto.CMEOfficialSettlement m WITH(NOLOCK) ON p.Symbol = m.Symbol
+        JOIN Trading.dbo.products s WITH(NOLOCK) ON p.Symbol = s.Contract
+    WHERE p.Position <> 0  AND p.Account in {accounts} and convert(DATE, m.TradeDate) = '{as_of:%Y-%m-%d}'
 """
 
 GET_LAST_TRADING_BALANCES_EOD_TRADEDATE = "SELECT Max(TradeDate) as last_date FROM trading.v2.EndOfDayBalance;"
@@ -201,29 +173,36 @@ class TradingRepository:
         'LEND-OXTF','WOOX-1-M-E','FTXE-1-M-E','OKEX-2-U1','LEND-HUBS6','BULL-1-M-M Loan','BULL-2-M-M Loan','LEND-BULL',
         'OKEX-2-S3','BINE-2-S1-M','DEFI-STRAT-1 Loan','GATE-1-M-M Loan','BINE-2-S2-M']
 
-    def __init__(self):
-        pass
+    def __init__(self, sql_query_driver=None, db_connector_factory=None):
+        self._sql_query_class = sql_query_driver or SqlQuery
+        self._db_connector_factory = db_connector_factory or sv_awoh_dw01_pyodbc_connection_factory
     
     def adhoc_query(self, sql: str) -> SqlQuery:
-        return SqlQuery(sql, pyodbc_conn_fn=qpt_sqlsvr_connection)
+        return self._sql_query_class(
+            sql, 
+            db_connector_factory=self._db_connector_factory)
 
     @property
     def last_positions_date(self) -> dt.date:
-        _, data = SqlQuery(GET_LAST_TRADING_BALANCES_EOD_TRADEDATE, pyodbc_conn_fn=qpt_sqlsvr_connection).as_list()
+        _, data = self._sql_query_class(
+            GET_LAST_TRADING_BALANCES_EOD_TRADEDATE, 
+            db_connector_factory=self._db_connector_factory).as_list()
         return data[0][0].date()
 
     def get_cme_positions(self, at_dtt_utc: dt.datetime) -> SqlQuery:
-        return SqlQuery(GET_CME_POSITIONS,
-                        at_dtt_utc.astimezone(ChicagoTimeZone),
-                        pyodbc_conn_fn=qpt_sqlsvr_connection)
+        return self._sql_query_class(
+            GET_CME_POSITIONS.format(accounts=('UNMBF222', ''), as_of=at_dtt_utc.astimezone(ChicagoTimeZone)),
+            db_connector_factory=self._db_connector_factory)
 
     def get_operations_eod_balances(self, eod_date: dt.date) -> SqlQuery:
-        return SqlQuery(GET_OPERATIONS_EOD_BALANCES.format(trade_date=eod_date, accounts=tuple(self._exchanges_balance_accounts + self._loans_accounts)),
-                        pyodbc_conn_fn=qpt_sqlsvr_connection)
+        return self._sql_query_class(
+            GET_OPERATIONS_EOD_BALANCES.format(trade_date=eod_date, accounts=tuple(self._exchanges_balance_accounts + self._loans_accounts)),
+            db_connector_factory=self._db_connector_factory)
 
     def get_trading_eod_balances(self, eod_date: dt.date) -> SqlQuery:
-        return SqlQuery(GET_OPERATIONS_EOD_BALANCES.format(trade_date=eod_date, accounts=tuple(self._exchanges_balance_accounts + self._loans_accounts)),
-                        pyodbc_conn_fn=qpt_sqlsvr_connection)
+        return self._sql_query_class(
+            GET_OPERATIONS_EOD_BALANCES.format(trade_date=eod_date, accounts=tuple(self._exchanges_balance_accounts + self._loans_accounts)),
+            db_connector_factory=self._db_connector_factory)
 
 
 GET_COINMARKETCAP_CLOSE_MARKS = """
@@ -248,13 +227,16 @@ GET_TRADING_CLOSE_MARKS = """
 
 class MarketDataRepository:
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, sql_query_driver=None, db_connector_factory=None):
+        self._sql_query_class = sql_query_driver or SqlQuery
+        self._db_connector_factory = db_connector_factory or sv_awoh_dw01_pyodbc_connection_factory
 
     def get_coinmarketcap_close_marks(self, close_date: dt.date) -> SqlQuery:
-        return SqlQuery(GET_COINMARKETCAP_CLOSE_MARKS.format(close_date=close_date),
-                        pyodbc_conn_fn=qpt_sqlsvr_connection)
+        return self._sql_query_class(
+            GET_COINMARKETCAP_CLOSE_MARKS.format(close_date=close_date),
+            db_connector_factory=self._db_connector_factory)
 
     def get_trading_close_marks(self, close_date: dt.date) -> SqlQuery:
-        return SqlQuery(GET_TRADING_CLOSE_MARKS.format(close_date=close_date),
-                        pyodbc_conn_fn=qpt_sqlsvr_connection)
+        return self._sql_query_class(
+            GET_TRADING_CLOSE_MARKS.format(close_date=close_date),
+            db_connector_factory=self._db_connector_factory)

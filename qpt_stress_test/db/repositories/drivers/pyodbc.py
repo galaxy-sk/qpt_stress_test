@@ -10,10 +10,11 @@ logger = logging.getLogger(__name__)
 
 
 class SqlQuery:
-
+    """ Class assumes connection factory returns a pyodbc.Connection object """
+    
     @contextmanager
     def db_cursor(self, *args, **kwargs):
-        cursor = self._pyodbc_conn_fn().cursor()
+        cursor = self._pyodbc_conn_factory().cursor()
         try:
             yield cursor
         finally:
@@ -24,7 +25,7 @@ class SqlQuery:
             self.cursor = None
 
         def __enter__(self, *args, **kwargs):
-            self.cursor = args[0]._pyodbc_conn_fn().cursor()
+            self.cursor = args[0]._pyodbc_conn_factory().cursor()
             return self
 
         def __call__(self, func):
@@ -34,14 +35,13 @@ class SqlQuery:
             self.cursor.close()
             return False
 
-    def __init__(self, query: str, *params, pyodbc_conn_fn: Callable[[], pyodbc.Connection] = None):
+    def __init__(self, query: str, *params, db_connector_factory: Callable[[], pyodbc.Connection] = None):
         self._query = query.format(*params)
         self._params = params
-        self._pyodbc_conn_fn = pyodbc_conn_fn
-
+        self._pyodbc_conn_factory = db_connector_factory
 
     def as_dataframe(self):
-        df = pd.read_sql(self._query, con=self._pyodbc_conn_fn())
+        df = pd.read_sql(self._query, con=self._pyodbc_conn_factory())
         return df
 
     def as_instrument_map(self) -> dict:
@@ -62,14 +62,14 @@ class SqlQuery:
         with self.db_cursor() as cursor:
             cursor.execute(self._query)
             rs = cursor.fetchall()
-            map = {
+            rs_as_map = {
                 idx: {
                     column[0]: value
                     for column, value in zip(cursor.description, row)
                 }
                 for idx, row in enumerate(rs)
             }     
-        return map
+        return rs_as_map
 
     def as_list(self) -> tuple:
         with self.db_cursor() as cursor:
