@@ -4,10 +4,13 @@ from qpt_stress_test.core.config import POSTGRES_URL, POSTGRES_JDBC_DRIVER, MSSQ
 import logging
 from collections.abc import Callable
 
+from .interfaces import SqlQueryInterface
+
+
 logger = logging.getLogger(__name__)
 
 
-class DatabricksSqlQuery:
+class DatabricksSqlQuery(SqlQueryInterface):
 
     def __init__(self, query: str, *params, db_connector_factory=None, spark_session=None):
         self._query = query.format(*params)

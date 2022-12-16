@@ -6,14 +6,20 @@ import qpt_stress_test.db.repositories.databricks as databricks
 import qpt_stress_test.db.repositories.qpt_mssql as qpt_mssql
 import qpt_stress_test.db.repositories.qpt_pg as qpt_pg
 from qpt_historic_pos.impl.utils.times import UtcTimeZone
+from qpt_stress_test.db.repositories.drivers import databricks_sql
 from qpt_stress_test.db.tasks import gdt_cluster_databricks_connection_factory
-
+from qpt_stress_test.db.repositories.drivers import sqlalchemy
+from qpt_stress_test.db.tasks import bfc_rds_sqlalchemy_engine_factory
+from qpt_stress_test.db.repositories.drivers import pyodbc
+from qpt_stress_test.db.tasks import sv_awoh_dw01_pyodbc_connection_factory
 
 class TestQptPgRepo:
 
     def test_pg_trading_adhoc_query(self):
         # Arrange
-        repo = qpt_pg.TradingRepository()
+        repo = qpt_pg.TradingRepository(
+            sql_query_driver=sqlalchemy.SqlQuery, 
+            db_connector_factory=bfc_rds_sqlalchemy_engine_factory)
         sql = (
             "select symbol_bfc from Trading.definition.instrument_reference "
             "where symbol_bfc is not null and expiration_time >= '{0:%Y-%m-%d 00:00:00.000}' limit 10"
@@ -27,7 +33,9 @@ class TestQptPgRepo:
 
     def test_qfl_pg_crypto_active_contracts(self):
         # Arrange
-        qpt_pg_reference_repo = qpt_pg.ReferenceRepository()
+        qpt_pg_reference_repo = qpt_pg.ReferenceRepository(
+            sql_query_driver=sqlalchemy.SqlQuery, 
+            db_connector_factory=bfc_rds_sqlalchemy_engine_factory)
         from_dt = dt.date.today()
 
         # Act
@@ -38,7 +46,9 @@ class TestQptPgRepo:
 
     def test_qfl_pg_instruments(self):
         # Arrange
-        qpt_pg_reference_repo = qpt_pg.ReferenceRepository()
+        qpt_pg_reference_repo = qpt_pg.ReferenceRepository(
+            sql_query_driver=sqlalchemy.SqlQuery, 
+            db_connector_factory=bfc_rds_sqlalchemy_engine_factory)
         symbol = ['G_T_BTC_USDT_SWAP', 'H_P_ETH-USD-SWAP']
 
         # Act
@@ -52,7 +62,9 @@ class TestQptMSSqlTradingRepo:
 
     def test_ms_trading_adhoc_query(self):
         # Arrange
-        repo = qpt_mssql.TradingRepository()
+        repo = qpt_mssql.TradingRepository(
+            sql_query_driver=pyodbc.SqlQuery, 
+            db_connector_factory=sv_awoh_dw01_pyodbc_connection_factory)
         # function will generate offset of 1 or 3 to set a run day that is a weekday in the past: weekday = 1..5
         offset = (dt.date.today().weekday() - ((dt.date.today().weekday() + 3) % 5) + 6) % 7
         run_date = dt.date.today() - dt.timedelta(days=offset)
@@ -128,7 +140,9 @@ FROM
 
     def test_mssql_coinmarketcap_marks(self):
         # Arrange
-        repo = qpt_mssql.TradingRepository()
+        repo = qpt_mssql.TradingRepository(
+            sql_query_driver=pyodbc.SqlQuery, 
+            db_connector_factory=sv_awoh_dw01_pyodbc_connection_factory)
         close_date = dt.date.today() - dt.timedelta(days=3)
 
         # Act
@@ -142,7 +156,9 @@ class TestQptMSSqlMarketDataRepo:
 
     def test_mssql_coinmarketcap_marks(self):
         # Arrange
-        repo = qpt_mssql.MarketDataRepository()
+        repo = qpt_mssql.MarketDataRepository(
+            sql_query_driver=pyodbc.SqlQuery, 
+            db_connector_factory=sv_awoh_dw01_pyodbc_connection_factory)
         close_date = dt.date.today() - dt.timedelta(days=3)
 
         # Act
@@ -153,7 +169,9 @@ class TestQptMSSqlMarketDataRepo:
 
     def test_mssql_trading_marks(self):
         # Arrange
-        repo = qpt_mssql.MarketDataRepository()
+        repo = qpt_mssql.MarketDataRepository(
+            sql_query_driver=pyodbc.SqlQuery, 
+            db_connector_factory=sv_awoh_dw01_pyodbc_connection_factory)
         close_date = dt.date.today() - dt.timedelta(days=3)
 
         # Act
@@ -167,7 +185,10 @@ class TestDatabricksRepo:
 
     def test_databricks_adhoc_query(self):
         # Arrange
-        repo = databricks.TradingRepository(gdt_cluster_databricks_connection_factory)
+
+        repo = databricks.TradingRepository(
+            sql_query_driver=databricks_sql.SqlQuery, 
+            db_connector_factory=gdt_cluster_databricks_connection_factory)
         sql = "SELECT Max(TradeDate) as last_date FROM qpt.trading_balances_eod txn;"
         
         # Act
@@ -179,7 +200,9 @@ class TestDatabricksRepo:
     @pytest.mark.skip(reason="Databricks client fails on complicated SQL")
     def test_databricks_get_cme_positions(self):
         # Arrange
-        repo = databricks.TradingRepository()
+        repo = databricks.TradingRepository(
+            sql_query_driver=databricks_sql.SqlQuery, 
+            db_connector_factory=gdt_cluster_databricks_connection_factory)
         asof_datetime = dt.datetime(2022, 12, 5, 22, 0, 0).astimezone(UtcTimeZone)
 
         # Act
@@ -191,7 +214,9 @@ class TestDatabricksRepo:
     @pytest.mark.skip(reason="Databricks client fails on complicated SQL")
     def test_databricks_get_exchange_balances(self):
         # Arrange
-        repo = databricks.TradingRepository()
+        repo = databricks.TradingRepository(
+            sql_query_driver=databricks_sql.SqlQuery, 
+            db_connector_factory=gdt_cluster_databricks_connection_factory)
         asof_datetime = dt.datetime.now().astimezone(UtcTimeZone)
 
         # Act

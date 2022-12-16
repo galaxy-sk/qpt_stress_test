@@ -21,7 +21,7 @@ loans_accounts = config.loans_accounts
 #   "ED&F": {"Account": "ED&F", "BalanceType": "", "TYPE": "COLLATERAL", "Endpoint": "ED&F"},
 #   "CASH": {"Account": "CASH", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "CASH"},
 account_map = {
-    "WEDBUSH": {"Account": "WEDBUSH", "BalanceType": "", "TYPE": "COLLATERAL", "Endpoint": "WEDBUSH"},
+    "WEDBUSH": {"Account": "Wedbush", "BalanceType": "", "TYPE": "COLLATERAL", "Endpoint": "WEDBUSH"},
     "ED&F Man Capital": {"Account": "ED&F Man Capital", "BalanceType": "", "TYPE": "COLLATERAL", "Endpoint": "ED&F"},
     "CASH": {"Account": "CASH", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "CASH"},
     "BTFX-1-M-E": {"Account": "BTFX-1-M-E", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "BTFX "},
@@ -227,7 +227,7 @@ def summary_exchange_balances_00utc(nav_date, assets_df, loans_df, summary):
     balances_df = pd.concat([assets_df, loans_df], ignore_index=True)
 
     # Wedbush hack
-    wedbush_amt = 8579966.92
+    wedbush_amt = 79941.92
     balances_df = pd.concat([balances_df, pd.DataFrame.from_dict({
         'Account': ['WEDBUSH'],
         'Balance': [wedbush_amt],
@@ -423,7 +423,12 @@ def run(run_as_eod: bool):
         summary_exchange_balances_df,
         asset_loans_cash_df,
         asset_and_open_positions_df
-    ) = generate_reports(eod_date, db_utc_datetime, trading_repo=qpt_mssql.TradingRepository())
+    ) = generate_reports(
+            eod_date, 
+            db_utc_datetime, 
+            trading_repo=qpt_mssql.TradingRepository(
+                sql_query_driver=pyodbc.SqlQuery, 
+                db_connector_factory=sv_awoh_dw01_pyodbc_connection_factory))
 
     # Dump to file
     net_open_position_report_df.to_csv(f"{db_utc_datetime:%Y-%m-%d_%H%M%S}_net_open_positions.csv", sep=',')

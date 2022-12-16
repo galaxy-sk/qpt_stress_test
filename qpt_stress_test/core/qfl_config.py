@@ -28,7 +28,7 @@ exchanges_balance_accounts = [
     'BINE-2-S1-F','BINE-2-S1-M','BINE-2-S1-P','BULL-2-M-E','BULL-2-M-M','HUBI-1-M-PT','BULL-3-M-E','BULL-4-M-E',
     'LEND-GACM','FBLK-WOOX-1-M-E','FBLK-LEND-GACM','DEFI-STRAT-1','GATE-1-M-E','GATE-1-M-M',
     'BINE-2-S2-E','BINE-2-S2-F','BINE-2-S2-M','BINE-2-S2-P','DEFI-STRAT-2','DEFI-STRAT-3','DEFI-STRAT-4',
-    'GATE-1-M-C','GATE-1-M-PT','DEFI-STRAT-5','DEFI-STRAT-6'
+    'GATE-1-M-C','GATE-1-M-PT','DEFI-STRAT-5','DEFI-STRAT-6','Wedbush'
 ]
 
 loans_accounts = [

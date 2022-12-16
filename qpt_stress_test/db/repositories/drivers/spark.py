@@ -1,50 +1,15 @@
 
-import logging
-import pandas as pd
-import pyodbc
-
-from collections.abc import Callable
-from contextlib import ContextDecorator, contextmanager
-
 from .interfaces import SqlQueryInterface
 
-
-logger = logging.getLogger(__name__)
-
-
 class SqlQuery(SqlQueryInterface):
-    """ Class assumes connection factory returns a pyodbc.Connection object """
     
-    @contextmanager
-    def db_cursor(self, *args, **kwargs):
-        cursor = self._pyodbc_conn_factory().cursor()
-        try:
-            yield cursor
-        finally:
-            cursor.close()
-
-    class cursor_context(ContextDecorator):
-        def __init__(self):
-            self.cursor = None
-
-        def __enter__(self, *args, **kwargs):
-            self.cursor = args[0]._pyodbc_conn_factory().cursor()
-            return self
-
-        def __call__(self, func):
-            super().__call__(func)
-            
-        def __exit__(self, *exc):
-            self.cursor.close()
-            return False
-
-    def __init__(self, query: str, *params, db_connector_factory: Callable[[], pyodbc.Connection] = None):
+    def __init__(self, query: str, *params, db_connector_factory=None):
         self._query = query.format(*params)
         self._params = params
-        self._pyodbc_conn_factory = db_connector_factory
+        self._spark = db_connector_factory
 
     def as_dataframe(self):
-        df = pd.read_sql(self._query, con=self._pyodbc_conn_factory())
+        df = self._spark.sql(self._query)
         return df
 
     def as_instrument_map(self) -> dict:

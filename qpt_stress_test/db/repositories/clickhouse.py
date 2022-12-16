@@ -5,6 +5,7 @@
 import datetime as dt
 
 from .drivers.clickhouse import SqlQuery
+from .drivers.interfaces import SqlQueryInterface
 from ..tasks import clickhouse_driver_client_factory
 from qpt_stress_test.core.config import ChicagoTimeZone
 
@@ -27,20 +28,25 @@ GET_LAST_TRADING_BALANCES_EOD_TRADEDATE = "SELECT Max(TradeDate) as last_date FR
 
 class TradingRepository:
 
-    def __init__(self):
-        pass
+    def __init__(self, sql_query_driver, db_connector_factory):
+        self._sql_query_class = SqlQuery
+        self._db_connector_factory = clickhouse_driver_client_factory
     
-    def adhoc_query(self, sql: str) -> SqlQuery:
-        return SqlQuery(sql, db_connector_factory=clickhouse_driver_client_factory)
+    def adhoc_query(self, sql: str) -> SqlQueryInterface:
+        return self._sql_query_class(
+            sql, 
+            db_connector_factory=self._db_connector_factory)
 
     @property
     def last_positions_date(self) -> dt.date:
-        _, data = SqlQuery(GET_LAST_TRADING_BALANCES_EOD_TRADEDATE, db_connector_factory=clickhouse_driver_client_factory).as_list()
+        _, data = self._sql_query_class(
+            GET_LAST_TRADING_BALANCES_EOD_TRADEDATE, 
+            db_connector_factory=self._db_connector_factory).as_list()
         return data[0][0].date()
 
-    def get_cme_positions(self, at_dtt_utc: dt.datetime) -> SqlQuery:
+    def get_cme_positions(self, at_dtt_utc: dt.datetime) -> SqlQueryInterface:
         # maybe work out from trade list when we actually started tradeing this instrument
-        return SqlQuery(GET_CME_MARK_PRICES, 
-                        at_dtt_utc.astimezone(ChicagoTimeZone).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
-                        at_dtt_utc.date().strftime('%Y-%m-%d'),
-                        db_connector_factory=clickhouse_driver_client_factory)
+        return self._sql_query_class(
+            GET_CME_MARK_PRICES, at_dtt_utc.astimezone(ChicagoTimeZone).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
+            at_dtt_utc.date().strftime('%Y-%m-%d'),
+            db_connector_factory=self._db_connector_factory)

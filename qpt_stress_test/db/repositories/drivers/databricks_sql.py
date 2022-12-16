@@ -4,7 +4,8 @@ import pandas as pd
 import databricks.sql.client
 from collections.abc import Callable
 from contextlib import ContextDecorator, contextmanager
-
+from qpt_stress_test.db.tasks import gdt_cluster_databricks_connection_factory
+from .interfaces import SqlQueryInterface
 #from pyspark.sql import SparkSession
 
 #spark = SparkSession.builder.appName("PC").enableHiveSupport().getOrCreate()
@@ -23,7 +24,7 @@ from contextlib import ContextDecorator, contextmanager
 #            print(row)
 
 
-class SqlQuery:
+class SqlQuery(SqlQueryInterface):
 
     @contextmanager
     def db_cursor(self, *args, **kwargs):
@@ -49,8 +50,7 @@ class SqlQuery:
     def __init__(self, query: str, *params, db_connector_factory: Callable[[], databricks.sql.client.Connection] = None):
         self._query = query.format(*params)
         self._params = params
-        self._databricks_connection_factory = db_connector_factory
-
+        self._databricks_connection_factory = db_connector_factory or gdt_cluster_databricks_connection_factory
 
     def as_dataframe(self):
         db_connection=self._databricks_connection_factory()
