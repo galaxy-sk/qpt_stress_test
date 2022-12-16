@@ -4,9 +4,8 @@
 """
 import datetime as dt
 
-#from .drivers.databricks_sql import SqlQuery
+from .drivers.interfaces import SqlQueryInterface
 from qpt_stress_test.core.config import ChicagoTimeZone
-from qpt_stress_test.db.tasks import gdt_cluster_databricks_connection_factory
 
 GET_CLIENT_EOD_TRADING_BALANCES = """
     SELECT * 
@@ -395,58 +394,14 @@ GET_EXCHANGE_BALANCES_BEFORE_TIMESTAMP = """
   FROM qpt.okex_2_s2_account_balance WHERE AsOf     BETWEEN '{0:%Y-%m-%d %H:%M:%S}' AND '{1:%Y-%m-%d %H:%M:%S}';
 """
 
-class SqlQuery:
-    
-    def __init__(self, query: str, *params, db_connector_factory=None):
-        self._query = query.format(*params)
-        self._params = params
-        self._spark = db_connector_factory
-
-    def as_dataframe(self):
-        df = self._spark.sql(self._query)
-        return df
-
-    def as_instrument_map(self) -> dict:
-        with self.db_cursor() as cursor:
-            cursor.execute(self._query)
-            rs = cursor.fetchall()
-            column_names = [col[0] for col in cursor.description]
-            map = {
-                (row.instrument if "instrument" in column_names else row.symbol_bfc).upper(): {
-                    column[0]: value
-                    for column, value in zip(cursor.description, row)
-                }
-                for row in rs
-            }     
-        return map
-
-    def as_map(self) -> dict:
-        with self.db_cursor() as cursor:
-            cursor.execute(self._query)
-            rs = cursor.fetchall()
-            rs_as_map = {
-                idx: {
-                    column[0]: value
-                    for column, value in zip(cursor.description, row)
-                }
-                for idx, row in enumerate(rs)
-            }     
-        return rs_as_map
-
-    def as_list(self) -> tuple:
-        with self.db_cursor() as cursor:
-            cursor.execute(self._query)
-            rs = cursor.fetchall()
-            columns = [column[0] for column in cursor.description]
-            data = [[value for value in row] for row in rs]
-        return columns, data
-
 class TradingRepository:
 
-    def __init__(self, sparksession):
-        self._spark = sparksession
-    def adhoc_query(self, sql: str) -> SqlQuery:
-        return SqlQuery(sql)
+    def __init__(self, sql_query_driver, db_connector_factory):
+        self._sql_query_class = sql_query_driver
+        self._db_connector_factory=db_connector_factory
+
+    def adhoc_query(self, sql: str):
+        return self._sql_query_class(sql, db_connector_factory=self._db_connector_factory)
     
     @property
     def last_positions_date(self) -> dt.date:
@@ -456,8 +411,9 @@ class TradingRepository:
         return data[0][0].date()
 
     def get_client_eod_trading_balances(self, trade_date, clients, accounts):
-        return SqlQuery(GET_CLIENT_EOD_TRADING_BALANCES.format(trade_date=trade_date, clients=tuple(clients), accounts=tuple(accounts)), 
-                        db_connector_factory=self._spark)
+        return self._sql_query_class(
+            GET_CLIENT_EOD_TRADING_BALANCES.format(trade_date=trade_date, clients=tuple(clients), accounts=tuple(accounts)), 
+            db_connector_factory=self._db_connector_factory)
 
     def get_exchange_balances(self, asof_utc_timestamp: dt.datetime):
         """ """
@@ -468,7 +424,7 @@ class TradingRepository:
             exchange_balance_sql, 
             db_connector_factory=self._db_connector_factory)
 
-    def get_cme_positions(self, at_dtt_utc: dt.datetime) -> SqlQuery:
+    def get_cme_positions(self, at_dtt_utc: dt.datetime) -> SqlQueryInterface:
         # maybe work out from trade list when we actually started trading this instrument
         return self._sql_query_class(
             GET_CME_POSITIONS,

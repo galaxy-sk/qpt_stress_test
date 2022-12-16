@@ -6,11 +6,13 @@ import sqlalchemy
 from collections.abc import Callable
 from contextlib import ContextDecorator, contextmanager
 
+from .interfaces import SqlQueryInterface
+
 
 logger = logging.getLogger(__name__)
 
 
-class SqlQuery:
+class SqlQuery(SqlQueryInterface):
     """ Class assumes db_connector_factory() produces a sqlalchemy.engine.base.Engine object """
 
     @contextmanager

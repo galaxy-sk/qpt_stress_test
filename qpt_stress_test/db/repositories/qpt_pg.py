@@ -4,8 +4,7 @@
 """
 import datetime as dt
 
-from .drivers.sqlalchemy import SqlQuery
-from ..tasks import bfc_rds_sqlalchemy_engine_factory
+from .drivers.interfaces import SqlQueryInterface
 
 """pg_conn = db_tasks.bfc_rds_sqlalchemy_engine_factory()
 sql = (
@@ -35,7 +34,7 @@ GET_NET_OPEN_POSITIONS_SNAPSHOT = """
             where snapshot_time between '{asof_start:%Y-%m-%d %H:%M:%S.000}' and '{asof_end:%Y-%m-%d %H:%M:%S.000}'
             group by account) t2 on t1.account = t2.account and t1.snapshot_time = t2.min_time
 """
-from .drivers.sqlalchemy import SqlQuery
+
 #snapshot_time, 
 #    t1.long_positions_notional, t1.short_positions_notional, t1.long_positions, t1.short_positions,
 #    t1.mark_prices, t1.long_unrealized_pnls, t1.short_unrealized_pnls
@@ -43,22 +42,23 @@ from .drivers.sqlalchemy import SqlQuery
 
 class TradingRepository:
 
-    def __init__(self, sql_query_driver=None, db_connector_factory=None):
-        self._sql_query_class = sql_query_driver or SqlQuery
-        self._db_connector_factory = db_connector_factory or bfc_rds_sqlalchemy_engine_factory
+    def __init__(self, sql_query_driver, db_connector_factory):
+        self._sql_query_class = sql_query_driver
+        self._db_connector_factory = db_connector_factory
     
-    def adhoc_query(self, sql: str) -> SqlQuery:
+    def adhoc_query(self, sql: str) -> SqlQueryInterface:
         return self._sql_query_class(
             sql, 
             db_connector_factory=self._db_connector_factory)
 
+    @property
     def last_positions_date(self) -> dt.date:
         _, data = self._sql_query_class(
             GET_LAST_TRADING_BALANCES_EOD_TRADEDATE, 
             db_connector_factory=self._db_connector_factory).as_list()
         return data[0][0].date()
 
-    def get_spot_definitions(self) -> SqlQuery:
+    def get_spot_definitions(self) -> SqlQueryInterface:
         # maybe work out from trade list when we actually started tradeing this instrument 
         return self._sql_query_class(
             GET_SPOT_CONTRACTS, 
@@ -133,17 +133,17 @@ GET_CONTRACT_DETAILS = """
 
 class ReferenceRepository:
 
-    def __init__(self, sql_query_driver=None, db_connector_factory=None):
-        self._sql_query_class = sql_query_driver or SqlQuery
-        self._db_connector_factory = db_connector_factory or bfc_rds_sqlalchemy_engine_factory
+    def __init__(self, sql_query_driver, db_connector_factory):
+        self._sql_query_class = sql_query_driver
+        self._db_connector_factory = db_connector_factory
     
-    def get_active_contracts(self, from_dt: dt.date) -> SqlQuery:
+    def get_active_contracts(self, from_dt: dt.date) -> SqlQueryInterface:
         # maybe work out from trade list when we actually started tradeing this instrument 
         return self._sql_query_class(
             GET_ACTIVE_CONTRACTS, from_dt, 
             db_connector_factory=self._db_connector_factory)
 
-    def get_instruments_details(self, symbol_bfcs: list) -> SqlQuery:
+    def get_instruments_details(self, symbol_bfcs: list) -> SqlQueryInterface:
         return self._sql_query_class(
             GET_CONTRACT_DETAILS.format(symbols=tuple(symbol_bfcs)), 
             db_connector_factory=self._db_connector_factory)

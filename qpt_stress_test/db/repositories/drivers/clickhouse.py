@@ -5,8 +5,10 @@ import clickhouse_driver
 from collections.abc import Callable
 from contextlib import ContextDecorator, contextmanager
 
+from .interfaces import SqlQueryInterface
 
-class SqlQuery:
+
+class SqlQuery(SqlQueryInterface):
 
     @contextmanager
     def db_cursor(self, *args, **kwargs):

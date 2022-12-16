@@ -3,8 +3,7 @@
 """
 import datetime as dt
 
-from .drivers.pyodbc import SqlQuery
-from ..tasks import sv_awoh_dw01_pyodbc_connection_factory
+from .drivers.interfaces import SqlQueryInterface
 from qpt_stress_test.core.config import ChicagoTimeZone
 
 
@@ -173,11 +172,11 @@ class TradingRepository:
         'LEND-OXTF','WOOX-1-M-E','FTXE-1-M-E','OKEX-2-U1','LEND-HUBS6','BULL-1-M-M Loan','BULL-2-M-M Loan','LEND-BULL',
         'OKEX-2-S3','BINE-2-S1-M','DEFI-STRAT-1 Loan','GATE-1-M-M Loan','BINE-2-S2-M']
 
-    def __init__(self, sql_query_driver=None, db_connector_factory=None):
-        self._sql_query_class = sql_query_driver or SqlQuery
-        self._db_connector_factory = db_connector_factory or sv_awoh_dw01_pyodbc_connection_factory
+    def __init__(self, sql_query_driver, db_connector_factory):
+        self._sql_query_class = sql_query_driver
+        self._db_connector_factory = db_connector_factory
     
-    def adhoc_query(self, sql: str) -> SqlQuery:
+    def adhoc_query(self, sql: str) -> SqlQueryInterface:
         return self._sql_query_class(
             sql, 
             db_connector_factory=self._db_connector_factory)
@@ -189,17 +188,17 @@ class TradingRepository:
             db_connector_factory=self._db_connector_factory).as_list()
         return data[0][0].date()
 
-    def get_cme_positions(self, at_dtt_utc: dt.datetime) -> SqlQuery:
+    def get_cme_positions(self, at_dtt_utc: dt.datetime) -> SqlQueryInterface:
         return self._sql_query_class(
             GET_CME_POSITIONS.format(accounts=('UNMBF222', ''), as_of=at_dtt_utc.astimezone(ChicagoTimeZone)),
             db_connector_factory=self._db_connector_factory)
 
-    def get_operations_eod_balances(self, eod_date: dt.date) -> SqlQuery:
+    def get_operations_eod_balances(self, eod_date: dt.date) -> SqlQueryInterface:
         return self._sql_query_class(
             GET_OPERATIONS_EOD_BALANCES.format(trade_date=eod_date, accounts=tuple(self._exchanges_balance_accounts + self._loans_accounts)),
             db_connector_factory=self._db_connector_factory)
 
-    def get_trading_eod_balances(self, eod_date: dt.date) -> SqlQuery:
+    def get_trading_eod_balances(self, eod_date: dt.date) -> SqlQueryInterface:
         return self._sql_query_class(
             GET_OPERATIONS_EOD_BALANCES.format(trade_date=eod_date, accounts=tuple(self._exchanges_balance_accounts + self._loans_accounts)),
             db_connector_factory=self._db_connector_factory)
@@ -227,16 +226,16 @@ GET_TRADING_CLOSE_MARKS = """
 
 class MarketDataRepository:
 
-    def __init__(self, sql_query_driver=None, db_connector_factory=None):
-        self._sql_query_class = sql_query_driver or SqlQuery
-        self._db_connector_factory = db_connector_factory or sv_awoh_dw01_pyodbc_connection_factory
+    def __init__(self, sql_query_driver, db_connector_factory):
+        self._sql_query_class = sql_query_driver
+        self._db_connector_factory = db_connector_factory
 
-    def get_coinmarketcap_close_marks(self, close_date: dt.date) -> SqlQuery:
+    def get_coinmarketcap_close_marks(self, close_date: dt.date) -> SqlQueryInterface:
         return self._sql_query_class(
             GET_COINMARKETCAP_CLOSE_MARKS.format(close_date=close_date),
             db_connector_factory=self._db_connector_factory)
 
-    def get_trading_close_marks(self, close_date: dt.date) -> SqlQuery:
+    def get_trading_close_marks(self, close_date: dt.date) -> SqlQueryInterface:
         return self._sql_query_class(
             GET_TRADING_CLOSE_MARKS.format(close_date=close_date),
             db_connector_factory=self._db_connector_factory)
