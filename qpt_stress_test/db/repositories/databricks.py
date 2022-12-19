@@ -5,6 +5,9 @@
 import datetime as dt
 
 from .drivers.interfaces import SqlQueryInterface
+#from .drivers.databricks_sql import SqlQuery
+#from .drivers.databricks_spark import SqlQuery
+#from ..tasks import gdt_cluster_connection
 from qpt_stress_test.core.config import ChicagoTimeZone
 
 GET_CLIENT_EOD_TRADING_BALANCES = """
@@ -394,11 +397,12 @@ GET_EXCHANGE_BALANCES_BEFORE_TIMESTAMP = """
   FROM qpt.okex_2_s2_account_balance WHERE AsOf     BETWEEN '{0:%Y-%m-%d %H:%M:%S}' AND '{1:%Y-%m-%d %H:%M:%S}';
 """
 
+
 class TradingRepository:
 
     def __init__(self, sql_query_driver, db_connector_factory):
         self._sql_query_class = sql_query_driver
-        self._db_connector_factory=db_connector_factory
+        self._db_connector_factory=db_connector_factory # sparksession
 
     def adhoc_query(self, sql: str):
         return self._sql_query_class(sql, db_connector_factory=self._db_connector_factory)

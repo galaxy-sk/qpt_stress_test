@@ -7,6 +7,7 @@ from .drivers.interfaces import SqlQueryInterface
 # self._sql_query_class = SqlQuery
 # self._db_connector_factory = qpt_sqlsvr_connectionfrom .drivers.jdbc 
 # import SqlQuery
+# from .drivers.jdbc import SqlQuery
 # from ..tasks import jdbc_sqlsvr_connection
 from qpt_stress_test.core.config import ChicagoTimeZone
 
@@ -206,7 +207,6 @@ class TradingRepository:
         return self._sql_query_class(
             GET_OPERATIONS_EOD_BALANCES.format(trade_date=eod_date, accounts=tuple(self._exchanges_balance_accounts + self._loans_accounts)),
             db_connector_factory=self._db_connector_factory)
-
 
 GET_COINMARKETCAP_CLOSE_MARKS = """
     select 
