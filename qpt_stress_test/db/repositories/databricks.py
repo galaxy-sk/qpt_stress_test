@@ -414,6 +414,7 @@ GET_EXCHANGE_BALANCES_BEFORE_TIMESTAMP = """
   FROM qpt.okex_2_s2_account_balance WHERE AsOf     BETWEEN '{from_ts:%Y-%m-%d %H:%M:%S}' AND '{to_ts:%Y-%m-%d %H:%M:%S}'
 """
 
+
 class SqlQuery:
     
     def __init__(self, query: str, *params, db_connector_factory=None):
@@ -459,6 +460,7 @@ class SqlQuery:
             columns = [column[0] for column in cursor.description]
             data = [[value for value in row] for row in rs]
         return columns, data
+
 
 class TradingRepository:
 
