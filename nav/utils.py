@@ -47,7 +47,6 @@ def _format_marks(df, df2, daytime):
     df.drop(df[df.Currency.duplicated(keep="first")].index, axis=0, inplace=True)
     df.set_index('Currency', inplace=True)
     # adding coins which are having a different name but essentially same as an existing coin
-    
     df.loc['AUSDC'] = df.loc['USDC'].values
     df.loc['AWETH'] = df.loc['WETH'].values
     df.loc['FRXETH'] = df.loc['ETH'].values
@@ -71,13 +70,14 @@ def _format_assets(daytime, df, marks):
 #     df.drop(df.loc[(df.Account.isin(['OKEX-2-W1', 'OKEX-2-U1', 'OKEX-2-S1', 'OKEX-2-S2', 'OKEX-2-S3', 'HUBI-1-M-P', 'FUBI-M','FUB2-M','HUBI-3-S3-F'])) 
 #                    & (df.BalanceType!='Balance')].index, axis=0, inplace=True) #comment out to include unrealized
     df.drop(df.loc[(df.Account.isin(['HUBI-M','HUB2-M'])) & (df.BalanceType.isin(['Margin Loan','Unrealized']))].index, axis=0, inplace=True)
-    df.drop(df.loc[(df.Account.isin(['DEFI-STRAT-8'])) & (df.BalanceType.isin(['wallet','borrow_token']))].index, axis=0, inplace=True)
     df.Account.replace(['OKEX-2-W1', 'OKEX-2-U1', 'FBLK-AUDIT-BINE', 'FBLK-AUDIT-HUBI', 'FBLK-AUDIT-OKEX', 'FBLK-Default', 'FBLK-GOTC-GACM', 'FBLK-LEND-BTGO', 'FBLK-LEND-DRAW', 
                         'FBLK-LEND-OXTF', 'FBLK-LEND-XRPF', 'FBLK-LMAC-M', 'FBLK-Network Deposits', 'FBLK-PITX-E', 'FBLK-LEND-CELS', 'FBLK-LEND-GADI', 'FBLK-LEND-NICO', 
-                        'FBLK-LEND-GENX','FBLK-BINE-MX-S1','FBLK-DEFI-AAVE','FBLK-GOTC-BIGO','FBLK-DYDX-1-M-P','FBLK-WOOX-1-M-E','FBLK-LEND-GACM','FBLK-DEFI-STRAT002'], 
+                        'FBLK-LEND-GENX','FBLK-BINE-MX-S1','FBLK-DEFI-AAVE','FBLK-GOTC-BIGO','FBLK-DYDX-1-M-P','FBLK-WOOX-1-M-E','FBLK-LEND-GACM'], 
                        ['OKEX-2-M-W', 'OKEX-2-M', 'FBLK', 'FBLK', 'FBLK', 'FBLK', 'FBLK', 'FBLK', 'FBLK', 'FBLK', 'FBLK', 'FBLK', 'FBLK', 'FBLK','FBLK', 'FBLK', 'FBLK', 'FBLK', 'FBLK', 'FBLK', 
-                        'FBLK', 'FBLK', 'FBLK', 'FBLK', 'FBLK'], inplace=True)
+                        'FBLK', 'FBLK', 'FBLK', 'FBLK'], inplace=True)
 
+    df.drop(df.loc[(df.Account.isin(['DEFI-STRAT-4'])) & (~df.BalanceType.isin(['wallet']))].index, axis=0, inplace=True)
+    df.drop(df.loc[(df.Account.isin(['DEFI-STRAT-8'])) & (df.BalanceType.isin(['wallet','borrow_token']))].index, axis=0, inplace=True)
     df.drop(df.loc[(df.Account.isin(['WOOX-1-M-E'])) & (df.Balance<0) & (~df.BalanceType.isin(['Unrealized']))].index, axis=0, inplace=True)
     df.drop(df.loc[(df.Account.isin(['FTXE-1-M-E'])) & (df.Balance<0) & (~df.BalanceType.isin(['Unrealized']))].index, axis=0, inplace=True)
     df.drop(df.loc[(df.Account.isin(['OKEX-2-M'])) & (df.Balance<0) & (~df.BalanceType.isin(['Unrealized']))].index, axis=0, inplace=True)
