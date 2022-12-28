@@ -47,8 +47,10 @@ def _format_marks(df, df2, daytime):
     df.drop(df[df.Currency.duplicated(keep="first")].index, axis=0, inplace=True)
     df.set_index('Currency', inplace=True)
     # adding coins which are having a different name but essentially same as an existing coin
+    
     df.loc['AUSDC'] = df.loc['USDC'].values
     df.loc['AWETH'] = df.loc['WETH'].values
+    df.loc['FRXETH'] = df.loc['ETH'].values
     return df
 
 def get_assets(daytime, exchanges, marks):
@@ -60,7 +62,7 @@ def _pull_sql_assets(daytime, exchanges):
     qry = """select a.Account, a.Balance, a.BalanceType, UPPER(a.Currency) as Currency, 
     b.TableName as Source, FORMAT(a.Date_UTC,'yyyyMMdd') as Timestamp, a.AsOf_UTC as Timestamp_Native
     from Operations.balances.EndOfDay_00UTC A LEFT JOIN Operations.balances.sources B on a.Account = b.Account
-    where balance != 0 and a.Date_UTC = '{trade_date}' and Currency not like '%SWAP%' and a.Account in {exchanges}
+    where balance != 0 and a.Date_UTC = '{trade_date}' and Currency not like '%SWAP%' and a.Account in {exchanges} and Seconds_from_00UTC <= 79259
     order by Account""".format(trade_date = daytime, exchanges = tuple(exchanges))
     df = _get_data(qry)
     return df
@@ -69,6 +71,7 @@ def _format_assets(daytime, df, marks):
 #     df.drop(df.loc[(df.Account.isin(['OKEX-2-W1', 'OKEX-2-U1', 'OKEX-2-S1', 'OKEX-2-S2', 'OKEX-2-S3', 'HUBI-1-M-P', 'FUBI-M','FUB2-M','HUBI-3-S3-F'])) 
 #                    & (df.BalanceType!='Balance')].index, axis=0, inplace=True) #comment out to include unrealized
     df.drop(df.loc[(df.Account.isin(['HUBI-M','HUB2-M'])) & (df.BalanceType.isin(['Margin Loan','Unrealized']))].index, axis=0, inplace=True)
+    df.drop(df.loc[(df.Account.isin(['DEFI-STRAT-8'])) & (df.BalanceType.isin(['wallet','borrow_token']))].index, axis=0, inplace=True)
     df.Account.replace(['OKEX-2-W1', 'OKEX-2-U1', 'FBLK-AUDIT-BINE', 'FBLK-AUDIT-HUBI', 'FBLK-AUDIT-OKEX', 'FBLK-Default', 'FBLK-GOTC-GACM', 'FBLK-LEND-BTGO', 'FBLK-LEND-DRAW', 
                         'FBLK-LEND-OXTF', 'FBLK-LEND-XRPF', 'FBLK-LMAC-M', 'FBLK-Network Deposits', 'FBLK-PITX-E', 'FBLK-LEND-CELS', 'FBLK-LEND-GADI', 'FBLK-LEND-NICO', 
                         'FBLK-LEND-GENX','FBLK-BINE-MX-S1','FBLK-DEFI-AAVE','FBLK-GOTC-BIGO','FBLK-DYDX-1-M-P','FBLK-WOOX-1-M-E','FBLK-LEND-GACM','FBLK-DEFI-STRAT002'], 
@@ -82,8 +85,10 @@ def _format_assets(daytime, df, marks):
     df.drop(df.loc[(df.Account.isin(['BINE-2-S1-M','BINE-2-S2-M'])) & (df.Balance<0) & (~df.BalanceType.isin(['Unrealized']))].index, axis=0, inplace=True)
     df.drop(df.loc[(df.Account.isin(['LEND-GACM'])) & (df.Balance<0) & (~df.BalanceType.isin(['Unrealized']))].index, axis=0, inplace=True)
     df.Currency.replace(['USDT_ERC20','SRM_LOCKED','BTCUSD','ETHUSD','EOSUSD','LINKUSD','LTCUSD','ATOM.S','DOT.S','KSM.S','FTM_FANTOM','AUSDC_ETH',
-                         'CVXCRV-F','VARIABLEDEBTCRV','BNB_BSC','ZIL_BSC','EUROC_ETH_F5NG','USDTEST'],
-                        ['USDT','SRM','BTC','ETH','EOS','LINK','LTC','ATOM','DOT','KSM','FTM','AUSDC','CVX','CRV','BNB','ZIL','EUROC','USD'], inplace=True)
+                         'CVXCRV-F','VARIABLEDEBTCRV','BNB_BSC','ZIL_BSC','EUROC_ETH_F5NG','USDTEST','FRXETH','AAVAUSDC','VARIABLEDEBTAVAUSDT',
+                         'VARIABLEDEBTUSDT','AURAB-STETH-STABLE-VAULT'],
+                        ['USDT','SRM','BTC','ETH','EOS','LINK','LTC','ATOM','DOT','KSM','FTM','AUSDC','CVX','CRV','BNB','ZIL','EUROC','USD','ETH',
+                         'AUSDC','USDT','USDT','ETH'], inplace=True)
     df['Notional'] = df.Balance * marks.reindex(df.Currency).fillna(0).Mark.values
     df = _format_fireblocks(df)
     return df
@@ -352,6 +357,8 @@ def summarize_all(td, yd, bs):
     yd['assets'].loc[yd['assets'].Account=='DEFI-STRAT-5','Notional'].sum(), td['assets'].loc[td['assets'].Account=='DEFI-STRAT-5','Notional'].sum()
     summary.loc['DEFI-STRAT-6',int_dt_yday],summary.loc['DEFI-STRAT-6',int_dt_today] = \
     yd['assets'].loc[yd['assets'].Account=='DEFI-STRAT-6','Notional'].sum(), td['assets'].loc[td['assets'].Account=='DEFI-STRAT-6','Notional'].sum()
+    summary.loc['DEFI-STRAT-8',int_dt_yday],summary.loc['DEFI-STRAT-8',int_dt_today] = \
+    yd['assets'].loc[yd['assets'].Account=='DEFI-STRAT-8','Notional'].sum(), td['assets'].loc[td['assets'].Account=='DEFI-STRAT-8','Notional'].sum()
     summary.loc['DYDX-1-M-P',int_dt_yday],summary.loc['DYDX-1-M-P',int_dt_today] = \
     yd['assets'].loc[yd['assets'].Account=='DYDX-1-M-P','Notional'].sum(), td['assets'].loc[td['assets'].Account=='DYDX-1-M-P','Notional'].sum()
     
@@ -384,6 +391,8 @@ def summarize_all(td, yd, bs):
 
     summary.loc['SHFT-1-W',int_dt_yday],summary.loc['SHFT-1-W',int_dt_today] = \
     yd['assets'].loc[yd['assets'].Account=='SHFT-1-W','Notional'].sum(), td['assets'].loc[td['assets'].Account=='SHFT-1-W','Notional'].sum()
+    
+    summary.loc['Wedbush',int_dt_yday],summary.loc['Wedbush',int_dt_today] = 79941.92, 79941.92
 
     # total assets
     summary.loc['Total Assets',int_dt_yday],summary.loc['Total Assets',int_dt_today] = \
@@ -434,11 +443,13 @@ def summarize_all(td, yd, bs):
     yd['loans'].loc[yd['loans'].Account=='GATE-1-M-M Loan','Notional'].sum(), td['loans'].loc[td['loans'].Account=='GATE-1-M-M Loan','Notional'].sum()
     summary.loc['DEFI-STRAT-1 Loan',int_dt_yday],summary.loc['DEFI-STRAT-1 Loan',int_dt_today] = \
     yd['loans'].loc[yd['loans'].Account=='DEFI-STRAT-1 Loan','Notional'].sum(), td['loans'].loc[td['loans'].Account=='DEFI-STRAT-1 Loan','Notional'].sum()
+    summary.loc['DEFI-STRAT-8 Loan',int_dt_yday],summary.loc['DEFI-STRAT-8 Loan',int_dt_today] = \
+    yd['loans'].loc[yd['loans'].Account=='DEFI-STRAT-8 Loan','Notional'].sum(), td['loans'].loc[td['loans'].Account=='DEFI-STRAT-8 Loan','Notional'].sum()
 
     # Total Loan
     summary.loc['Total Loan',int_dt_yday],summary.loc['Total Loan',int_dt_today] = \
-    summary.loc['HUB2-M Margin Loan':'DEFI-STRAT-1 Loan',int_dt_yday].sum(), \
-    summary.loc['HUB2-M Margin Loan':'DEFI-STRAT-1 Loan',int_dt_today].sum()
+    summary.loc['HUB2-M Margin Loan':'DEFI-STRAT-8 Loan',int_dt_yday].sum(), \
+    summary.loc['HUB2-M Margin Loan':'DEFI-STRAT-8 Loan',int_dt_today].sum()
 
     # Bluescales
     summary.loc['HUBI-3-S3-F',int_dt_yday],summary.loc['HUBI-3-S3-F',int_dt_today] = \
@@ -503,6 +514,5 @@ def export_to_excel(td, yd, summary, fileloc):
                  ws.cell(row=r_idx, column=c_idx, value=value)
     ws = wb['NAV Summary 00UTC']
     ws['D6'] = "{} {}, {} 00:00UTC".format(td["day"].strftime('%B'), td["day"].day, td["day"].year)
-    # wb.save(r"{}/Operations/EOD Asset Report/{}_NAV REPORT 00UTC.xlsx".format(fileloc, td["day"].strftime('%Y%m%d')))
-    # wb.save(r"C:/Users/bpr/Documents/b.works/pending_navs/00utc/sent/{}_NAV REPORT 00UTC.xlsx".format(td["day"].strftime('%Y%m%d')))
-    wb.save(r"C:/Temp/{}_NAV REPORT 00UTC.xlsx".format(td["day"].strftime('%Y%m%d')))
+    wb.save(r"{}/Operations/EOD Asset Report/{}_NAV REPORT 00UTC.xlsx".format(fileloc, td["day"].strftime('%Y%m%d')))
+    wb.save(r"C:/Users/bpr/Documents/b.works/pending_navs/00utc/sent/{}_NAV REPORT 00UTC.xlsx".format(td["day"].strftime('%Y%m%d')))

@@ -1,161 +1,33 @@
 import datetime as dt
 import pandas as pd
 
+import qpt_stress_test.core.config as config
+import qpt_stress_test.core.qpt_config as qpt_config
+
+# Bowen's code:
+import qpt_historic_pos.impl.open_positions_report
+
+# Bovas's code:
+import nav.utils
+
+# Direct connection to QPT databases
 import qpt_stress_test.db.repositories.drivers.pyodbc as pyodbc
-from qpt_stress_test.db.tasks import sv_awoh_dw01_pyodbc_connection_factory
-import qpt_stress_test.core.qfl_config as config
 import qpt_stress_test.db.repositories.qpt_mssql as qpt_mssql
-from qpt_historic_pos.impl.utils.times import ChicagoTimeZone, UtcTimeZone
-from qpt_historic_pos.impl.open_positions_report import gen_open_position_report
-from nav.utils import (
-    get_marks, get_assets, get_loans, get_edf_cash, get_bank_balances, summarize_bluescales, summarize_all)
+from qpt_stress_test.db.tasks import sv_awoh_dw01_pyodbc_connection_factory
 
-
-# These lists of accounts are from Bovas NAV code and change regularly; update them on core.config.qpt
-datlib_loc = config.datlib_loc
-bs_info = config.bs_info
-exchanges_balance_accounts = config.exchanges_balance_accounts
-loans_accounts = config.loans_accounts
-
-# In 'NAV Report 00UTC.xls!lookup_table' use: 
-#  =""""&A2&""": {"""&A$1&""": """&A2&""", """&B$1&""": """&B2&""", """&C$1&""": """&C2&""", """&D$1&""": """&D2&"""},"
-# Add: 
-#   "ED&F": {"Account": "ED&F", "BalanceType": "", "TYPE": "COLLATERAL", "Endpoint": "ED&F"},
-#   "CASH": {"Account": "CASH", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "CASH"},
-account_map = {
-    "WEDBUSH": {"Account": "Wedbush", "BalanceType": "", "TYPE": "COLLATERAL", "Endpoint": "WEDBUSH"},
-    "ED&F Man Capital": {"Account": "ED&F Man Capital", "BalanceType": "", "TYPE": "COLLATERAL", "Endpoint": "ED&F"},
-    "CASH": {"Account": "CASH", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "CASH"},
-    "BTFX-1-M-E": {"Account": "BTFX-1-M-E", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "BTFX "},
-    "BTSE": {"Account": "BTSE", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "BTSE"},
-    "FTXE-1-M-E": {"Account": "FTXE-1-M-E", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "FTXE"},
-    "FUB2-M": {"Account": "FUB2-M", "BalanceType": "Balance", "TYPE": "ASSET", "Endpoint": "HUBI"},
-    "FUBI-M": {"Account": "FUBI-M", "BalanceType": "Balance", "TYPE": "ASSET", "Endpoint": "HUBI"},
-    "HUB2-E": {"Account": "HUB2-E", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "HUBI"},
-    "HUB2-M": {"Account": "HUB2-M", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "HUBI"},
-    "HUBI-1-M-P": {"Account": "HUBI-1-M-P", "BalanceType": "Balance", "TYPE": "ASSET", "Endpoint": "HUBI"},
-    "HUBI-3-S3-F": {"Account": "HUBI-3-S3-F", "BalanceType": "Balance", "TYPE": "ASSET", "Endpoint": "BSCALE"},
-    "HUBI-3-S3-M": {"Account": "HUBI-3-S3-M", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "BSCALE"},
-    "HUBI-E": {"Account": "HUBI-E", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "HUBI"},
-    "HUBI-M": {"Account": "HUBI-M", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "HUBI"},
-    "KRKE": {"Account": "KRKE", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "KRKE"},
-    "LMAC": {"Account": "LMAC", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "LMAC"},
-    "LMAX": {"Account": "LMAX", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "LMAX"},
-    "OKEX-2-S1": {"Account": "OKEX-2-S1", "BalanceType": "Balance", "TYPE": "ASSET", "Endpoint": "OKEX"},
-    "OKEX-2-S2": {"Account": "OKEX-2-S2", "BalanceType": "Balance", "TYPE": "ASSET", "Endpoint": "OKEX"},
-    "OKEX-2-S3": {"Account": "OKEX-2-S3", "BalanceType": "Balance", "TYPE": "ASSET", "Endpoint": "OKEX"},
-    "OKEX-2-M": {"Account": "OKEX-2-M", "BalanceType": "Balance", "TYPE": "ASSET", "Endpoint": "OKEX"},
-    "OKEX-2-M-W": {"Account": "OKEX-2-M-W", "BalanceType": "Balance", "TYPE": "ASSET", "Endpoint": "OKEX"},
-    "PITX-E": {"Account": "PITX-E", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "PITX"},
-    "SHFT-1-W": {"Account": "SHFT-1-W", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "SHFT WALLET"},
-    "WOOX-1-M-E": {"Account": "WOOX-1-M-E", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "WOOX"},
-    "FBLK": {"Account": "FBLK", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "FBLK"},
-    "BULL-1-M-E": {"Account": "BULL-1-M-E", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "BULL"},
-    "BULL-1-M-M": {"Account": "BULL-1-M-M", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "BULL"},
-    "LEND-GACM": {"Account": "LEND-GACM", "BalanceType": "", "TYPE": "FUND", "Endpoint": "GALAXY"},
-    "LEND-HUBI": {"Account": "LEND-HUBI", "BalanceType": "", "TYPE": "EXCHLOAN", "Endpoint": "HUBI"},
-    "LEND-LMAC": {"Account": "LEND-LMAC", "BalanceType": "", "TYPE": "EXCHLOAN", "Endpoint": "LMAC"},
-    "LEND-OKEX": {"Account": "LEND-OKEX", "BalanceType": "", "TYPE": "EXCHLOAN", "Endpoint": "OKEX"},
-    "LEND-OXTF": {"Account": "LEND-OXTF", "BalanceType": "", "TYPE": "LOAN", "Endpoint": "ORCHID"},
-    "LEND-PITX": {"Account": "LEND-PITX", "BalanceType": "", "TYPE": "EXCHLOAN", "Endpoint": "PITX"},
-    "LEND-XRPF": {"Account": "LEND-XRPF", "BalanceType": "", "TYPE": "LOAN", "Endpoint": "RIPPLE"},
-    "WOOX-1-M-E Margin Loan": {
-        "Account": "WOOX-1-M-E Margin Loan", "BalanceType": "", "TYPE": "EXCHLOAN", "Endpoint": "WOOX"},
-    "HUBI-M Margin Loan": { 
-        "Account": "HUBI-M Margin Loan", "BalanceType": "Margin Loan", "TYPE": "EXCHLOAN", "Endpoint": "HUBI"},
-    "HUB2-M Margin Loan": { 
-        "Account": "HUB2-M Margin Loan", "BalanceType": "Margin Loan", "TYPE": "EXCHLOAN", "Endpoint": "HUBI"},
-    "HUBI-3-S3-M Loan": { 
-        "Account": "HUBI-3-S3-M Loan", "BalanceType": "", "TYPE": "EXCHLOAN", "Endpoint": "BSCALE"},
-    "FTXE-1-M-E Margin Loan": { 
-        "Account": "FTXE-1-M-E Margin Loan", "BalanceType": "", "TYPE": "EXCHLOAN", "Endpoint": "FTXE"},
-    "LEND-HUBS6": {"Account": "LEND-HUBS6", "BalanceType": "", "TYPE": "EXCHLOAN", "Endpoint": "HUBI"},
-    "OKEX-2-M Margin Loan": { 
-        "Account": "OKEX-2-M Margin Loan", "BalanceType": "", "TYPE": "EXCHLOAN", "Endpoint": "OKEX"},
-    "BINE-MX-S1-P": {"Account": "BINE-MX-S1-P", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "BINEMX"},
-    "BINE-MX-S1-F": {"Account": "BINE-MX-S1-F", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "BINEMX"},
-    "BINE-MX-S1-E": {"Account": "BINE-MX-S1-E", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "BINEMX"},
-    "BINE-MX-S1-M": {"Account": "BINE-MX-S1-M", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "BINEMX"},
-    "DYDX-1-M-P": {"Account": "DYDX-1-M-P", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "DYDX"},
-    "BULL-1-M-M Loan": {"Account": "BULL-1-M-M Loan", "BalanceType": "", "TYPE": "EXCHLOAN", "Endpoint": "BULL"},
-    "HUBI-3-S3-E": {"Account": "HUBI-3-S3-E", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "BSCALE"},
-    "BINE-2-S1-E": {"Account": "BINE-2-S1-E", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "BINE"},
-    "BINE-2-S1-F": {"Account": "BINE-2-S1-F", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "BINE"},
-    "BINE-2-S1-M": {"Account": "BINE-2-S1-M", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "BINE"},
-    "BINE-2-S1-P": {"Account": "BINE-2-S1-P", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "BINE"},
-    "BULL-2-M-E": {"Account": "BULL-2-M-E", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "BULL"},
-    "BULL-2-M-M": {"Account": "BULL-2-M-M", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "BULL"},
-    "LEND-BULL": {"Account": "LEND-BULL", "BalanceType": "", "TYPE": "EXCHLOAN", "Endpoint": "BULL"},
-    "HUBI-1-M-PT": {"Account": "HUBI-1-M-PT", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "HUBI"},
-    "BULL-3-M-E": {"Account": "BULL-3-M-E", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "BULL"},
-    "OKEX-2-S3 Margin Loan": { 
-        "Account": "OKEX-2-S3 Margin Loan", "BalanceType": "", "TYPE": "EXCHLOAN", "Endpoint": "OKEX"},
-    "BULL-4-M-E": { 
-        "Account": "BULL-4-M-E", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "BULL"},
-    "BINE-2-S1-M Margin Loan": { 
-        "Account": "BINE-2-S1-M Margin Loan", "BalanceType": "", "TYPE": "EXCHLOAN", "Endpoint": "BINE"},
-    "BULL-2-M-M Loan": { 
-        "Account": "BULL-2-M-M Loan", "BalanceType": "", "TYPE": "EXCHLOAN", "Endpoint": "BULL"},
-    "GATE-1-M-E": {"Account": "GATE-1-M-E", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "GATE"},
-    "GATE-1-M-M": {"Account": "GATE-1-M-M", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "GATE"},
-    "GATE-1-M-M Loan": {"Account": "GATE-1-M-M Loan", "BalanceType": "", "TYPE": "EXCHLOAN", "Endpoint": "GATE"},
-    "DEFI-STRAT-1": {"Account": "DEFI-STRAT-1", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "DEFI"},
-    "DEFI-STRAT-1 Loan": {"Account": "DEFI-STRAT-1 Loan", "BalanceType": "", "TYPE": "EXCHLOAN", "Endpoint": "DEFI"},
-    "BINE-2-S2-E": {"Account": "BINE-2-S2-E", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "BINE"},
-    "BINE-2-S2-F": {"Account": "BINE-2-S2-F", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "BINE"},
-    "BINE-2-S2-M": {"Account": "BINE-2-S2-M", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "BINE"},
-    "BINE-2-S2-P": {"Account": "BINE-2-S2-P", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "BINE"},
-    "BINE-2-S2-M Margin Loan": { 
-        "Account": "BINE-2-S2-M Margin Loan", "BalanceType": "", "TYPE": "EXCHLOAN", "Endpoint": "BINE"},
-    "DEFI-STRAT-2": {"Account": "DEFI-STRAT-2", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "DEFI"},
-    "DEFI-STRAT-3": {"Account": "DEFI-STRAT-3", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "DEFI"},
-    "DEFI-STRAT-4": {"Account": "DEFI-STRAT-4", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "DEFI"},
-    "DEFI-STRAT-5": {"Account": "DEFI-STRAT-5", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "DEFI"},
-    "DEFI-STRAT-6": {"Account": "DEFI-STRAT-6", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "DEFI"},
-    "GATE-1-M-C": {"Account": "GATE-1-M-C", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "GATE"},
-    "GATE-1-M-PT": {"Account": "GATE-1-M-PT", "BalanceType": "", "TYPE": "ASSET", "Endpoint": "GATE"},
-}
-
-endpoint_map = {
-    "BINE": {"exchange": "BINANCE", },
-    "BSCALE": {"exchange": "BSCALE", },
-    "BTFX ": {"exchange": "BTFX", },
-    "BTSE": {"exchange": "BTSE", },
-    "BULL": {"exchange": "BULL", },
-    "CASH": {"exchange": "CASH", },
-    "CME": {"exchange": "CME", },
-    "DEFI": {"exchange": "DEFI", },
-    "DYDX": {"exchange": "DYDX", },
-    "ED&F": {"exchange": "ED&F", },
-    "ED&F Man Capital": {"exchange": "ED&F", },
-    "FBLK": {"exchange": "FBLK", },
-    "FTXE": {"exchange": "FTX", },
-    "FUBI": {"exchange": "HUOBI", },
-    "GALAXY": {"exchange": "GALAXY", },
-    "GATE": {"exchange": "GATE", },
-    "HUBI": {"exchange": "HUOBI", },
-    "KRKE": {"exchange": "KRKE", },
-    "LMAC": {"exchange": "LMAC", },
-    "LMAX": {"exchange": "LMAX", },
-    "OKEX": {"exchange": "OKEX", },
-    "ORCHID": {"exchange": "ORCHID", },
-    "PITX": {"exchange": "PITX", },
-    "RIPPLE": {"exchange": "RIPPLE", },
-    "SHFT WALLET": {"exchange": "SHFT WALLET", },
-    "WOOX": {"exchange": "WOOX", },
-    "WEDBUSH": {"exchange": "WEDBUSH", },
-}
-
+#
+# Lists of accounts are from Bovas NAV code and change regularly; update them on core.config.qpt_config
+#
 
 def get_bank_balances_with_fallback(get_date: dt.date):
-    bank_today = get_date
-    bmo_df, slv_cash, sig_cash = get_bank_balances(bank_today)
+    balance_date = get_date
+    bmo_df, slv_cash, sig_cash = nav.utils.get_bank_balances(balance_date)
     while bmo_df is None:
-        bank_today = bank_today - dt.timedelta(days=1)
-        bmo_df, slv_cash, sig_cash = get_bank_balances(bank_today)
+        balance_date = balance_date - dt.timedelta(days=1)
+        bmo_df, slv_cash, sig_cash = nav.utils.get_bank_balances(balance_date)
 
-    if bank_today != get_date:
-        print(f'using old cash data from {bank_today:%Y-%m-%d} for {get_date:%Y-%m-%d}')
+    if balance_date != get_date:
+        print(f'using old cash data from {balance_date:%Y-%m-%d} for {get_date:%Y-%m-%d}')
         df = bmo_df.reset_index()
         df['trade_date'] = f'{get_date:%Y%m%d}'
         df.set_index(['trade_date', 'currency'], inplace=True)
@@ -164,15 +36,32 @@ def get_bank_balances_with_fallback(get_date: dt.date):
     return bmo_df, slv_cash, sig_cash
 
 
+def get_edf_cash_with_fallback(get_date: dt.date):
+    """ # Running as of today, the accounting file does not exist """
+    edf_cash_date = get_date
+    while True:
+        try:
+            edf_cash = nav.utils.get_edf_cash(edf_cash_date, fileloc=qpt_config.datlib_loc)
+            break
+        except Exception:  #FileNotFoundError:
+            # No EDF collateral data for given date
+            edf_cash_date = edf_cash_date - dt.timedelta(days=1)
+
+    if edf_cash_date != get_date:
+        print(f'using old edf cash data from {edf_cash_date:%Y-%m-%d} for {get_date:%Y-%m-%d}')
+
+    return edf_cash
+
+
 def generate_daily_nav_00utc(nav_date: dt.date = None) -> tuple:
     """ The logic of this code comes from Bovas' generate_daily_nav_00utc.ipynb notebook """
 
     # Start with yesterday's data: more likely this exists
     yesterday = nav_date - dt.timedelta(days=1)
-    yd_marks_df = get_marks(yesterday)
-    yd_assets_df = get_assets(yesterday, exchanges_balance_accounts, yd_marks_df)
-    yd_loans_df = get_loans(yesterday, loans_accounts, yd_marks_df)
-    yd_edf_cash = get_edf_cash(yesterday, fileloc=datlib_loc)
+    yd_marks_df = nav.utils.get_marks(yesterday)
+    yd_assets_df = nav.utils.get_assets(yesterday, qpt_config.exchange_balance_accounts, yd_marks_df)
+    yd_loans_df = nav.utils.get_loans(yesterday, qpt_config.loan_accounts, yd_marks_df)
+    yd_edf_cash = get_edf_cash_with_fallback(yesterday)
     yd_bmo_df, yd_slv_cash, yd_sig_cash = get_bank_balances_with_fallback(yesterday)
     yd = {
         "day": yesterday,
@@ -186,15 +75,11 @@ def generate_daily_nav_00utc(nav_date: dt.date = None) -> tuple:
     }
 
     # Today's data
-    marks_df = get_marks(nav_date)
-    assets_df = get_assets(nav_date, exchanges_balance_accounts, marks_df)
-    loans_df = get_loans(nav_date, loans_accounts, marks_df)
-    try:
-        edf_cash = get_edf_cash(nav_date, fileloc=datlib_loc)
-    except FileNotFoundError:
-        print(f"No EDF collateral data: reuse data from {yesterday:%Y-%m-%d}")
-        edf_cash = yd_edf_cash
-    
+    marks_df = nav.utils.get_marks(nav_date)
+    assets_df = nav.utils.get_assets(nav_date, qpt_config.exchange_balance_accounts, marks_df)
+    loans_df = nav.utils.get_loans(nav_date, qpt_config.loan_accounts, marks_df)
+    edf_cash = get_edf_cash_with_fallback(nav_date)
+
     # Get today's bank balances
     td_bmo_df, td_slv_cash, td_sig_cash = get_bank_balances_with_fallback(nav_date)
 
@@ -209,8 +94,8 @@ def generate_daily_nav_00utc(nav_date: dt.date = None) -> tuple:
         'sig': td_sig_cash
     }
 
-    bs = summarize_bluescales(td, yd, bs_info)
-    summary = summarize_all(td, yd, bs)
+    bs = nav.utils.summarize_bluescales(td, yd, qpt_config.bs_info)
+    summary = nav.utils.summarize_all(td, yd, bs)
 
     # This is what we need for our process
     return assets_df, loans_df, summary
@@ -229,7 +114,9 @@ def summary_exchange_balances_00utc(nav_date, assets_df, loans_df, summary):
     balances_df = pd.concat([assets_df, loans_df], ignore_index=True)
 
     # Wedbush hack
-    wedbush_amt = 79941.92
+    if nav_date < dt.date(2022, 12, 13):
+        print('here')
+    wedbush_amt = 8579966.92 if nav_date < dt.date(2022, 12, 13) else 79941.92 
     balances_df = pd.concat([balances_df, pd.DataFrame.from_dict({
         'Account': ['WEDBUSH'],
         'Balance': [wedbush_amt],
@@ -267,25 +154,25 @@ def summary_exchange_balances_00utc(nav_date, assets_df, loans_df, summary):
     balances_df[''] = ''
 
     # Check that BOVAS accounts have a mapping entry
-    unconfigured_accounts = [account for account in balances_df['Account'] if account not in account_map]
+    unconfigured_accounts = [account for account in balances_df['Account'] if account not in qpt_config.account_map]
     if unconfigured_accounts:
         print("These accounts need to be added to account_map")
         for account in unconfigured_accounts:
             print(account)
-            account_map[account] = {'TYPE': 'UNKNOWN', 'Endpoint': account.split("-")[0]}
+            qpt_config.account_map[account] = {'TYPE': 'UNKNOWN', 'Endpoint': account.split("-")[0]}
         print()
 
     balances_df['REFERENCE 1'] = [
-        f"{account_map[account]['TYPE']}{account_map[account]['Endpoint']}{account_map[account]['TYPE']}{currency}" 
+        f"{qpt_config.account_map[account]['TYPE']}{qpt_config.account_map[account]['Endpoint']}{qpt_config.account_map[account]['TYPE']}{currency}" 
         for account, currency in zip(balances_df['Account'], balances_df['Currency'])]
     balances_df['REFERENCE 2'] = [
-        f"{account_map[account]['TYPE']}{account_map[account]['Endpoint']}" 
+        f"{qpt_config.account_map[account]['TYPE']}{qpt_config.account_map[account]['Endpoint']}" 
         for account in balances_df['Account']]
     balances_df['TYPE'] = [
-        f"{account_map[account]['TYPE']}" 
+        f"{qpt_config.account_map[account]['TYPE']}" 
         for account in balances_df['Account']]
     balances_df['Endpoint'] = [
-        f"{account_map[account]['Endpoint']}" 
+        f"{qpt_config.account_map[account]['Endpoint']}" 
         for account in balances_df['Account']]
 
     return balances_df
@@ -306,7 +193,7 @@ def summary_asset_loans_cash(summary_exchange_balances_df: pd.DataFrame) -> pd.D
 
     asset_loans_cash_df["utc_timestamp"] = summary_exchange_balances_df["Timestamp_Native"]
     asset_loans_cash_df["exchange"] = [
-        endpoint_map[endpoint]['exchange']
+        qpt_config.endpoint_map[endpoint]['exchange']
         for endpoint in summary_exchange_balances_df["Endpoint"]]
     asset_loans_cash_df["account"] = summary_exchange_balances_df["Account"]
     asset_loans_cash_df["instrument"] = summary_exchange_balances_df["Currency"]
@@ -335,8 +222,8 @@ def summary_asset_loans_cash(summary_exchange_balances_df: pd.DataFrame) -> pd.D
 
 def net_open_positions(report_utc_datetime, trading_repo):
     # Run Bowan's net_open_positions_report
-    db_chicago_datetime = report_utc_datetime.astimezone(ChicagoTimeZone)
-    net_open_position_report_df = gen_open_position_report(db_chicago_datetime)
+    db_chicago_datetime = report_utc_datetime.astimezone(config.ChicagoTimeZone)
+    net_open_position_report_df = qpt_historic_pos.impl.open_positions_report.gen_open_position_report(db_chicago_datetime)
 
     # Add in timestamp
     columns = ['utc_timestamp'] + list(net_open_position_report_df.columns)
@@ -399,7 +286,7 @@ def generate_reports(eod_date: dt.date, report_utc_datetime: dt.datetime, tradin
 
     report_datetime = dt.datetime(2022, 11, 20, 22, 0, 0, 0)
     get_start_datetime = pymd.UtcTimeZone.localize(report_datetime - dt.timedelta(days=2))
-    get_end_datetime = UtcTimeZone.localize(db_chicago_datetime)
+    get_end_datetime = pymd.UtcTimeZone.localize(db_chicago_datetime)
     symbols = set(asset_and_open_positions_df["instrument"])
     underlying = set(asset_and_open_positions_df["underlying"])
     marketdata_repo.reference_rate_ts(symbols, )"""
@@ -407,26 +294,18 @@ def generate_reports(eod_date: dt.date, report_utc_datetime: dt.datetime, tradin
     return net_open_position_report_df, summary_exchange_balances_df, asset_loans_cash_df, asset_and_open_positions_df
 
 
-def run(run_as_eod: bool):
+def run(nav_date: dt.date, positions_at_chicago_time: dt.time):
 
-    if run_as_eod:
-        eod_date = dt.date.today() - dt.timedelta(days=1)
-        db_datetime = dt.datetime.combine(eod_date, dt.time(hour=16, minute=0, second=0))
-        db_chicago_datetime = ChicagoTimeZone.localize(db_datetime)
-    else:
-        # Live
-        report_date = dt.date.today()
-        eod_date = report_date - dt.timedelta(days=1)
-        db_chicago_datetime = dt.datetime.now().astimezone(ChicagoTimeZone)
+    db_chicago_datetime = config.ChicagoTimeZone.localize(dt.datetime.combine(nav_date, positions_at_chicago_time))
+    db_utc_datetime = db_chicago_datetime.astimezone(config.UtcTimeZone)
 
-    db_utc_datetime = db_chicago_datetime.astimezone(UtcTimeZone)
     (
         net_open_position_report_df,
         summary_exchange_balances_df,
         asset_loans_cash_df,
         asset_and_open_positions_df
     ) = generate_reports(
-            eod_date, 
+            nav_date, 
             db_utc_datetime, 
             trading_repo=qpt_mssql.TradingRepository(
                 sql_query_driver=pyodbc.SqlQuery, 
@@ -434,7 +313,7 @@ def run(run_as_eod: bool):
 
     # Dump to file
     net_open_position_report_df.to_csv(f"{db_utc_datetime:%Y-%m-%d_%H%M%S}_net_open_positions.csv", sep=',')
-    summary_exchange_balances_df.to_csv(f"{eod_date:%Y-%m-%d}_summary_exchange_balances_00utc.csv", sep=',')
+    summary_exchange_balances_df.to_csv(f"{nav_date:%Y-%m-%d}_summary_exchange_balances_00utc.csv", sep=',')
     asset_and_open_positions_df.to_csv(f"{db_utc_datetime:%Y-%m-%d_%H%M%S}_asset_and_open_positions.csv", sep=',')
 
     
@@ -447,5 +326,12 @@ if __name__ == "__main__":
         print(f"Adding {os.path.join(os.getcwd(), 'qpt_historic_pos', 'impl')} to sys.path")
         sys.path.append(os.path.join(os.getcwd(), "qpt_historic_pos", "impl"))
 
-    run(run_as_eod=True)
+    # Regenerate T-n to T-1 data; use Chicago time, as that is what most MS SQL timestamps are:
+    n = 6
+    for day_offset in range(n, 0, -1):
+        run(dt.date.today() - dt.timedelta(days=day_offset), dt.time(hour=16, minute=0, second=0))
+
+    # # Regenerate using as of now
+    # run(dt.date.today(), dt.datetime.now().astimezone(config.ChicagoTimeZone).time())
+   
     exit()

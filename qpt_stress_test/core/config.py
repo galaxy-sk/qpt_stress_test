@@ -15,6 +15,7 @@ NewYorkTimeZone = pytz.timezone('America/New_York')
 LATimeZone = pytz.timezone('America/Los_Angeles')
 HongKongTimeZone = pytz.timezone('Asia/Hong_Kong')
 TokyoTimeZone = pytz.timezone('Asia/Tokyo')
+UtcTimeZone = pytz.UTC
 
 CLICKHOUSE_HOST = os.getenv('CLICKHOUSE_HOST')
 CLICKHOUSE_USER = os.getenv('CLICKHOUSE_USER')
