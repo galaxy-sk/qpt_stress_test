@@ -233,7 +233,7 @@ def net_open_positions(report_utc_datetime, trading_repo):
     # Get the CME positions directly from the MSSQL; over weekends, walk backward to get data from past date
     cme_rollback = 0
     cme_df = trading_repo.get_cme_positions(report_utc_datetime).as_dataframe()
-    while cme_df.empty and cme_rollback < 4:
+    while cme_df.empty and cme_rollback < 6:
         cme_rollback += 1
         cme_df = trading_repo.get_cme_positions(report_utc_datetime - dt.timedelta(days=cme_rollback)).as_dataframe()
     if cme_rollback:
@@ -327,7 +327,7 @@ if __name__ == "__main__":
         sys.path.append(os.path.join(os.getcwd(), "qpt_historic_pos", "impl"))
 
     # Regenerate T-n to T-1 data; use Chicago time, as that is what most MS SQL timestamps are:
-    n = 6
+    n = 3
     for day_offset in range(n, 0, -1):
         run(dt.date.today() - dt.timedelta(days=day_offset), dt.time(hour=16, minute=0, second=0))
 
