@@ -55,16 +55,14 @@ GET_LAST_TRADING_BALANCES_EOD_TRADEDATE = "SELECT Max(TradeDate) as last_date FR
 
 GET_OPERATIONS_EOD_BALANCES = """
     select
-        a.Account, a.Balance, a.BalanceType, UPPER(a.Currency) as Currency, b.TableName as Source, 
+        a.Account, a.Balance, a.BalanceType, UPPER(a.Currency) as Currency, Isnull(b.TableName, '') as Source, 
         FORMAT(a.Date_UTC,'yyyyMMdd') as Timestamp, a.AsOf_UTC as Timestamp_Native
-    from Operations.balances.EndOfDay_00UTC A 
-        LEFT JOIN Operations.balances.sources B on a.Account = b.Account
+    from
+        Operations.balances.EndOfDay_00UTC A 
+            LEFT JOIN Operations.balances.sources B on a.Account = b.Account
     where 
         balance != 0 
-        and a.Date_UTC = '{trade_date:%Y%m%d}' 
-        and Currency not like '%SWAP%' 
-        and a.Account in {accounts}
-    order by Account;
+        and a.Date_UTC = '{eod_date:%Y%m%d}' 
 """
 
 """
@@ -160,22 +158,6 @@ FROM trading.pnl.EOD_NEW eod WITH(NOLOCK)
 
 class TradingRepository:
 
-    # These lists of accounts are from Bovas NAV code and change regularly
-    _exchanges_balance_accounts = [
-        'SHFT-1-W', 'HUBI-M', 'HUBI-E', 'HUB2-E', 'HUB2-M', 'LMAC', 'LMAX', 'KRKE', 'BTSE', 'PITX-E', 'WOOX-1-M-E', 
-        'FUB2-M', 'HUBI-3-S3-M','OKEX-2-W1', 'OKEX-2-U1', 'FUBI-M', 'OKEX-2-S1', 'OKEX-2-S2', 'HUBI-1-M-P', 
-        'FBLK-AUDIT-BINE', 'FBLK-AUDIT-HUBI', 'FBLK-AUDIT-OKEX', 'FBLK-Default', 'FBLK-GOTC-GACM', 'FBLK-LEND-BTGO', 
-        'FBLK-LEND-DRAW', 'FBLK-LEND-OXTF', 'FBLK-LEND-XRPF', 'FBLK-LMAC-M', 'FBLK-Network Deposits', 'FBLK-PITX-E',
-        'FBLK-LEND-CELS', 'FBLK-LEND-GADI', 'FBLK-LEND-NICO', 'FBLK-LEND-GENX','FBLK-BINE-MX-S1','FBLK-DEFI-AAVE',
-        'FBLK-GOTC-BIGO','FBLK-DYDX-1-M-P','HUBI-3-S3-F','HUBI-3-S3-E','OKEX-2-S3','BTFX-1-M-E','FTXE-1-M-E',
-        'BULL-1-M-E','BULL-1-M-M','DYDX-1-M-P','BINE-MX-S1-P','BINE-MX-S1-F','BINE-MX-S1-E','BINE-MX-S1-M','BINE-2-S1-E',
-        'BINE-2-S1-F','BINE-2-S1-M','BINE-2-S1-P','BULL-2-M-E','BULL-2-M-M','HUBI-1-M-PT','BULL-3-M-E','BULL-4-M-E',
-        'LEND-GACM','FBLK-WOOX-1-M-E','FBLK-LEND-GACM','DEFI-STRAT-1','GATE-1-M-E','GATE-1-M-M',
-        'BINE-2-S2-E','BINE-2-S2-F','BINE-2-S2-M','BINE-2-S2-P','DEFI-STRAT-2','DEFI-STRAT-3','DEFI-STRAT-4']
-    _loans_accounts = [
-        'LEND-GACM', 'LEND-HUBI', 'LEND-LMAC','LEND-PITX','LEND-XRPF','LEND-OKEX','HUBI-3-S3-M Loan','HUBI-M','HUB2-M',
-        'LEND-OXTF','WOOX-1-M-E','FTXE-1-M-E','OKEX-2-U1','LEND-HUBS6','BULL-1-M-M Loan','BULL-2-M-M Loan','LEND-BULL',
-        'OKEX-2-S3','BINE-2-S1-M','DEFI-STRAT-1 Loan','GATE-1-M-M Loan','BINE-2-S2-M']
 
     def __init__(self, sql_query_driver, db_connector_factory):
         self._sql_query_class = SqlQuery
@@ -200,13 +182,15 @@ class TradingRepository:
 
     def get_operations_eod_balances(self, eod_date: dt.date) -> SqlQueryInterface:
         return self._sql_query_class(
-            GET_OPERATIONS_EOD_BALANCES.format(trade_date=eod_date, accounts=tuple(self._exchanges_balance_accounts + self._loans_accounts)),
+            GET_OPERATIONS_EOD_BALANCES.format(eod_date=eod_date),
             db_connector_factory=self._db_connector_factory)
 
     def get_trading_eod_balances(self, eod_date: dt.date) -> SqlQueryInterface:
+        # Todo: replace with call against trading.EOD_new or similar
         return self._sql_query_class(
-            GET_OPERATIONS_EOD_BALANCES.format(trade_date=eod_date, accounts=tuple(self._exchanges_balance_accounts + self._loans_accounts)),
+            GET_OPERATIONS_EOD_BALANCES.format(trade_date=eod_date),
             db_connector_factory=self._db_connector_factory)
+
 
 GET_COINMARKETCAP_CLOSE_MARKS = """
     select 
