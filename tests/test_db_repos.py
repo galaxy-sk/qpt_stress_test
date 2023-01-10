@@ -65,8 +65,7 @@ class TestQptMSSqlTradingRepo:
         repo = qpt_mssql.TradingRepository(
             sql_query_driver=pyodbc.SqlQuery, 
             db_connector_factory=sv_awoh_dw01_pyodbc_connection_factory)
-        # function will generate offset of 1 or 3 to set a run day that is a weekday in the past: weekday = 1..5
-        offset = (dt.date.today().weekday() - ((dt.date.today().weekday() + 3) % 5) + 6) % 7
+        offset = 1 if dt.date.today().weekday() in (1, 2, 3, 4) else 3
         run_date = dt.date.today() - dt.timedelta(days=offset)
         sql = """
 DECLARE @T_DATE AS DATE;

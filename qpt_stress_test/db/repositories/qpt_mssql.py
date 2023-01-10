@@ -213,7 +213,7 @@ class TradingRepository:
     def get_trading_eod_balances(self, eod_date: dt.date) -> SqlQueryInterface:
          # Todo: replace with call against trading.EOD_new or similar
         return self._sql_query_class(
-            GET_OPERATIONS_EOD_BALANCES.format(trade_date=eod_date),
+            GET_OPERATIONS_EOD_BALANCES.format(eod_date=eod_date),
             db_connector_factory=self._db_connector_factory)
 
 
