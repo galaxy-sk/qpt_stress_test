@@ -12,15 +12,28 @@
 # MAGIC 
 # MAGIC import qpt_stress_test.core.config as config
 # MAGIC reload(config)
+# MAGIC import qpt_stress_test.db.repositories.drivers.databricks_spark as databricks_spark
+# MAGIC reload(databricks_spark)
+# MAGIC import qpt_stress_test.db.repositories.drivers.jdbc as databricks_jdbc
+# MAGIC reload(databricks_jdbc)
 # MAGIC import qpt_stress_test.db.repositories.databricks as databricks
 # MAGIC reload(databricks)
+# MAGIC import qpt_stress_test.db.repositories.qpt_pg as qpt_pg
+# MAGIC reload(qpt_pg)
+# MAGIC import qpt_stress_test.db.repositories.qpt_mssql as qpt_mssql
+# MAGIC reload(qpt_mssql)
 # MAGIC 
 # MAGIC print(f"Is this a databricks environment: {config.IS_DATABRICKS_ENVIRON}")
 # MAGIC print(config.POSTGRES_URL, config.POSTGRES_JDBC_DRIVER)
 # MAGIC print(config.MSSQL_URL, config.MSSQL_JDBC_DRIVER)
 # MAGIC 
-# MAGIC # trade_service = positions.TradeService(spark)
-# MAGIC trading_repo = databricks.TradingRepository(spark)
+# MAGIC # trade_service = positions.TradeService( spark)
+# MAGIC trading_repo = databricks.TradingRepository(sql_query_driver=databricks_spark.SqlQuery, db_connector_factory=spark)
+# MAGIC 
+# MAGIC pg_trading_repo = qpt_pg.TradingRepository(sql_query_driver=databricks_jdbc.SqlQuery, db_connector_factory=databricks_jdbc.SparkJdbcConnector.qpt_pg_connector(spark))
+# MAGIC pg_reference_repo = qpt_pg.ReferenceRepository(sql_query_driver=databricks_jdbc.SqlQuery, db_connector_factory=databricks_jdbc.SparkJdbcConnector.qpt_pg_connector(spark))
+# MAGIC 
+# MAGIC ms_trading_repo = qpt_mssql.TradingRepository(sql_query_driver=databricks_jdbc.SqlQuery, db_connector_factory=databricks_jdbc.SparkJdbcConnector.qpt_mssql_connector(spark))
 
 # COMMAND ----------
 
@@ -29,45 +42,43 @@
 
 # COMMAND ----------
 
-# Databricks qpt.trading_balances
-display(spark.sql(databricks.GET_CLIENT_EOD_TRADING_BALANCES.format(trade_date=dt.date(2022, 11, 23), clients=('CC_TRbtcRateSpread19',''), accounts=('HUBI-E', 'UNMBF222'))))
+# these calls execute SQL against databricks tables
+# Databricks qpt.trading_balances; test that calling SQL directly matches calling through repo object
+display(spark.sql(databricks.GET_CLIENT_EOD_TRADING_BALANCES.format(trade_date=dt.date(2023, 1, 4), 
+                                                                    clients=('CC_TRbtcRateSpread19', ''), 
+                                                                    accounts=('HUBI-E', 'UNMBF222'))).groupby(['Symbol', 'Product', 'Client', 'Endpoint', 'Account']).sum())
 
-spark_sql = trading_repo.get_client_eod_trading_balances(trade_date=dt.date(2022, 11, 23), clients=('CC_TRbtcRateSpread19',''), accounts=('HUBI-E', 'UNMBF222'))
+spark_sql = trading_repo.get_client_eod_trading_balances(trade_date=dt.date(2023, 1, 4), 
+                                                         clients=('CC_TRbtcRateSpread19',''), 
+                                                         accounts=('HUBI-E', 'UNMBF222'))
+display(spark_sql.as_dataframe().groupby(['Symbol', 'Product', 'Client', 'Endpoint', 'Account']).sum())
+
+# COMMAND ----------
+
+# These calls execute against MSSQL server
+# qpt_mssql_connector only works on gdt-cluster-market-making
+spark_sql = ms_trading_repo.get_trading_eod_balances(eod_date=dt.date(2023, 1, 4))
 display(spark_sql.as_dataframe())
 
 # COMMAND ----------
 
-# Postgres
-GET_ACTIVE_CONTRACTS = """
-    SELECT * FROM (
-        SELECT 
-           symbol_bfc, 
-           symbol_exch,
-           upper(exchange) as exchange, 
-           endpoint,
-           instrument_type, 
-           expiration_time, 
-           is_linear, 
-           contract_size, 
-           qty_multiplier, 
-           currency_position,
-           currency_settlement, 
-           case when is_linear > 0 then currency_position else currency_settlement end as underlying
-        from Trading.definition.instrument_reference 
-        where instrument_type in ('SWAP', 'FUTURE') and symbol_bfc is not null and expiration_time >= '{0:%Y-%m-%d 00:00:00.000}' 
-    ) inst_ref
-"""
-
+# These calls execute against PG server
+# Postgres tests
 df = spark.read \
             .format("jdbc") \
             .option("url", config.POSTGRES_URL) \
             .option("driver", config.POSTGRES_JDBC_DRIVER) \
-            .option("query", GET_ACTIVE_CONTRACTS.format(dt.datetime(2022, 11, 1))) \
+            .option("query", qpt_pg.GET_ACTIVE_CONTRACTS.format(dt.datetime(2023, 1, 4))) \
             .load()
 display(df)
 
+pg_reference_repo = qpt_pg.ReferenceRepository(sql_query_driver=databricks_jdbc.SqlQuery, db_connector_factory=databricks_jdbc.SparkJdbcConnector.qpt_pg_connector(spark))
+spark_sql = pg_reference_repo.get_active_contracts(from_dt=dt.datetime(2023, 1, 4))
+display(spark_sql.as_dataframe())
+
 # COMMAND ----------
 
+# Execute sql directly against the JDBC drivers
 # SQLServer
 GET_TRADING_CLOSE_MARKS = """
     select DATE, Currency, Mark, Source 
@@ -109,7 +120,7 @@ GET_CLIENT_EOD_TRADING_BALANCES = """
 SELECT * FROM (
    SELECT
         a.Account, a.Balance, a.BalanceType, UPPER(a.Currency) as Currency, 
-        IsNull(b.TableName, '') as Source, FORMAT(a.Date_UTC,'yyyyMMdd') as Timestamp, a.AsOf_UTC as Timestamp_Native
+        b.TableName as Source, FORMAT(a.Date_UTC,'yyyyMMdd') as Timestamp, a.AsOf_UTC as Timestamp_Native
    FROM 
        Operations.balances.EndOfDay_00UTC A 
        LEFT JOIN Operations.balances.sources B on a.Account = b.Account

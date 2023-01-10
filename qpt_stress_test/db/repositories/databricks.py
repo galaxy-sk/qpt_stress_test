@@ -417,12 +417,14 @@ GET_EXCHANGE_BALANCES_BEFORE_TIMESTAMP = """
 
 class TradingRepository:
 
-    def __init__(self, sql_query_driver, db_connector_factory):
+    def __init__(self, sql_query_driver, db_connector_factory=None):
         self._sql_query_class = sql_query_driver
         self._db_connector_factory=db_connector_factory # sparksession
 
     def adhoc_query(self, sql: str):
-        return self._sql_query_class(sql, db_connector_factory=self._db_connector_factory)
+        #return self._sql_query_class(sql, db_connector_factory=self._db_connector_factory)
+        return SqlQuery(sql, databricks_connection_fn=self._spark) #gdt_cluster_connection)
+        return self._spark.sql()
     
     @property
     def last_positions_date(self) -> dt.date:
@@ -432,16 +434,17 @@ class TradingRepository:
         return data[0][0].date()
 
     def get_client_eod_trading_balances(self, trade_date, clients, accounts):
-        return self._sql_query_class(
-            GET_CLIENT_EOD_TRADING_BALANCES.format(trade_date=trade_date, clients=tuple(clients), accounts=tuple(accounts)), 
-            db_connector_factory=self._db_connector_factory)
+        #return self._sql_query_class(
+        #    GET_CLIENT_EOD_TRADING_BALANCES.format(trade_date=trade_date, clients=tuple(clients), accounts=tuple(accounts)), 
+        #    db_connector_factory=self._db_connector_factory)
+        return SqlQuery(GET_CLIENT_EOD_TRADING_BALANCES.format(trade_date=trade_date, clients=tuple(clients), accounts=tuple(accounts)), 
+                        db_connector_factory=self._spark)
 
     def get_exchange_balances(self, asof_utc_timestamp: dt.datetime):
         """ """
         db_timestamp = asof_utc_timestamp.astimezone(ChicagoTimeZone)
-        exchange_balance_sql = GET_EXCHANGE_BALANCES_BEFORE_TIMESTAMP.format(
-          from_ts=db_timestamp - dt.timedelta(minutes=180),
-          to_ts=db_timestamp + dt.timedelta(minutes=5))
+        exchange_balance_sql = GET_EXCHANGE_BALANCES_BEFORE_TIMESTAMP.format(db_timestamp + dt.timedelta(minutes=30),
+                                                                             db_timestamp)
         return self._sql_query_class(
             exchange_balance_sql, 
             db_connector_factory=self._db_connector_factory)
