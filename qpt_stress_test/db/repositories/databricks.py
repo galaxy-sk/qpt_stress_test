@@ -420,7 +420,6 @@ class TradingRepository:
     def __init__(self, sql_query_driver, db_connector_factory=None):
         self._sql_query_class = sql_query_driver
         self._db_connector_factory=db_connector_factory # sparksession
-        self._spark = sql_query_driver
 
     def adhoc_query(self, sql: str):
         #return self._sql_query_class(sql, db_connector_factory=self._db_connector_factory)

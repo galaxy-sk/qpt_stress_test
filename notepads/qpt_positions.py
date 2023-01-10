@@ -43,6 +43,7 @@ GET_TRADING_CLOSE_MARKS = """
         from trading.pnl.marks
         where DATE = '{close_date:%Y%m%d}'
 """
+
 df = spark.read \
             .format("jdbc") \
             .option("url", config.MSSQL_URL) \

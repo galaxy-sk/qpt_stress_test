@@ -226,3 +226,4 @@ class MarketDataRepository:
         return self._sql_query_class(
             GET_TRADING_CLOSE_MARKS.format(close_date=close_date),
             db_connector_factory=self._db_connector_factory)
+
