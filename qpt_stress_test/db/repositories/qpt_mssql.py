@@ -59,7 +59,6 @@ GET_OPERATIONS_EOD_BALANCES = """
         and a.Date_UTC = '{trade_date:%Y%m%d}' 
         and Currency not like '%SWAP%' 
         and a.Account in {accounts}
-    order by Account;
 """
 
 """
