@@ -402,7 +402,7 @@ FROM (
   SELECT token as currency, 'WOOX' as endpoint, 'WOOX-1-M-E' AS Account, '' AS BalanceType, Holding as balance, asof_CST as asof, ROW_NUMBER() OVER (PARTITION BY token ORDER BY asof_CST DESC) as rn  
   from RawData.woox_1_m_e.holdings WITH(NOLOCK) WHERE asof_CST BETWEEN '{from_ts:%Y-%m-%d %H:%M:%S}' AND '{to_ts:%Y-%m-%d %H:%M:%S}'
 ) as rawdata
-WHERE balance <> 0 AND rn= 1 ORDER BY endpoint, currency;
+WHERE balance <> 0 AND rn= 1
 """
 
 GET_CME_CRYPTO_SETTLEMENT = """
@@ -440,7 +440,6 @@ GET_COINMARKETCAP_CLOSE_MARKS = """
     where 
         format(timestamp,'yyyyMMdd') = '{close_date:%Y%m%d}' and
         name not in ('CyberMiles','Genesis Mana','NFT','NEFTiPEDiA','UNICORN Token','DEONEX COIN','Don-key','LOLTOKEN','SoMee.Social [OLD]')
-    order by  DATE, symbol;
 """
 
 GET_TRADING_CLOSE_MARKS = """
@@ -448,7 +447,6 @@ GET_TRADING_CLOSE_MARKS = """
     from
         trading.pnl.marks
     where DATE = '{close_date:%Y%m%d}'
-    order by  DATE, Currency;
 """
 
 

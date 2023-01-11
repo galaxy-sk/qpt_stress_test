@@ -8,19 +8,21 @@
 # MAGIC print(project_root_path)
 # MAGIC 
 # MAGIC import datetime as dt
-# MAGIC from importlib import reload
 # MAGIC 
 # MAGIC import qpt_stress_test.core.config as config
-# MAGIC reload(config)
 # MAGIC import qpt_stress_test.db.repositories.drivers.databricks_spark as databricks_spark
-# MAGIC reload(databricks_spark)
 # MAGIC import qpt_stress_test.db.repositories.drivers.jdbc as databricks_jdbc
-# MAGIC reload(databricks_jdbc)
 # MAGIC import qpt_stress_test.db.repositories.databricks as databricks
-# MAGIC reload(databricks)
 # MAGIC import qpt_stress_test.db.repositories.qpt_pg as qpt_pg
-# MAGIC reload(qpt_pg)
 # MAGIC import qpt_stress_test.db.repositories.qpt_mssql as qpt_mssql
+# MAGIC 
+# MAGIC from importlib import reload
+# MAGIC 
+# MAGIC reload(config)
+# MAGIC reload(databricks_spark)
+# MAGIC reload(databricks_jdbc)
+# MAGIC reload(databricks)
+# MAGIC reload(qpt_pg)
 # MAGIC reload(qpt_mssql)
 # MAGIC 
 # MAGIC print(f"Is this a databricks environment: {config.IS_DATABRICKS_ENVIRON}")
