@@ -5,29 +5,16 @@
 # MAGIC project_root_path = os.path.abspath(os.path.join(os.getcwd(), '..'))
 # MAGIC if project_root_path not in sys.path:
 # MAGIC     sys.path.append(project_root_path)
-# MAGIC print(project_root_path)
+# MAGIC print(f"Code root path: {project_root_path}")
 # MAGIC 
 # MAGIC import datetime as dt
-# MAGIC from importlib import reload
-# MAGIC 
 # MAGIC import qpt_stress_test.core.config as config
+# MAGIC 
+# MAGIC from importlib import reload
 # MAGIC reload(config)
 # MAGIC 
-# MAGIC print(f"Is this a databricks environment: {config.IS_DATABRICKS_ENVIRON}")
 # MAGIC print(config.POSTGRES_URL, config.POSTGRES_JDBC_DRIVER)
 # MAGIC print(config.MSSQL_URL, config.MSSQL_JDBC_DRIVER)
-# MAGIC import sys, os
-# MAGIC project_root_path = os.path.abspath(os.path.join(os.getcwd(), '..'))
-# MAGIC if project_root_path not in sys.path:
-# MAGIC     sys.path.append(project_root_path)
-# MAGIC print(project_root_path)
-# MAGIC 
-# MAGIC 
-# MAGIC from importlib import reload
-# MAGIC 
-# MAGIC import qpt_stress_test.core.config as config
-# MAGIC reload(config)
-# MAGIC 
 # MAGIC print(f"IS_DATABRICKS_ENVIRON={config.IS_DATABRICKS_ENVIRON}")
 
 # COMMAND ----------
