@@ -312,7 +312,7 @@ FROM (
   SELECT currency as currency, /*type,*/ 'HUBI' as endpoint, 'HUBI-3-S3-M' AS Account, BalanceType, Balance as balance, asof, /*ROW_NUMBER() OVER (PARTITION BY currency, type, BalanceType ORDER BY AsOf DESC)*/ 1 as rn 
   from RawData.hubi_3_s3.account_balance WITH(NOLOCK) WHERE (SELECT MAX(asof) from RawData.hubi_3_s3.account_balance WITH(NOLOCK)) >= '{from_ts:%Y-%m-%d %H:%M:%S}' AND asof = (SELECT MAX(asof) from RawData.hubi_3_s3.account_balance WITH(NOLOCK) WHERE AsOf BETWEEN '{from_ts:%Y-%m-%d %H:%M:%S}' AND '{to_ts:%Y-%m-%d %H:%M:%S}' )
   UNION 
-  SELECT currency as currency, /*type,*/ 'HUBI' as endpoint, 'HUB2-M' AS Account, BalanceType, Balance as balance, asof, /*ROW_NUMBER() OVER (PARTITION BY currency, type, BalanceType ORDER BY AsOf DESC)*/ 1 as rn 
+  SELECT currency as currency, /*type,*/ 'HUB2' as endpoint, 'HUB2-M' AS Account, BalanceType, Balance as balance, asof, /*ROW_NUMBER() OVER (PARTITION BY currency, type, BalanceType ORDER BY AsOf DESC)*/ 1 as rn 
   from RawData.hub2.account_balance WITH(NOLOCK) WHERE (SELECT MAX(asof) from  RawData.hub2.account_balance WITH(NOLOCK)) >= '{from_ts:%Y-%m-%d %H:%M:%S}' AND asof = (SELECT MAX(asof) from  RawData.hub2.account_balance WITH(NOLOCK) WHERE AsOf BETWEEN '{from_ts:%Y-%m-%d %H:%M:%S}' AND '{to_ts:%Y-%m-%d %H:%M:%S}' )
   UNION
   SELECT currency as currency,  /*type,*/ 'HUBI' as endpoint, 'HUBI-E' AS Account, '' AS BalanceType, sum(Balance) as balance, asof, ROW_NUMBER() OVER (PARTITION BY currency, type, BalanceType ORDER BY AsOf DESC) as rn 
@@ -360,16 +360,16 @@ FROM (
   SELECT symbol as currency, 'HUBI' as endpoint, 'HUBI-3-S3' AS Account, 'account_info unrealized' AS BalanceType, (profit_unreal) as balance, timestamp as asof, ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY timestamp DESC) as rn 
   from RawData.hubi_3_s3.contract_account_info WITH(NOLOCK) WHERE timestamp BETWEEN '{from_ts:%Y-%m-%d %H:%M:%S}' AND '{to_ts:%Y-%m-%d %H:%M:%S}'
   UNION
-  SELECT symbol as currency, 'HUBI' as endpoint, 'FUBI-M' AS Account, '' AS BalanceType, (margin_balance) as balance, timestamp as asof, ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY timestamp DESC) as rn 
+  SELECT symbol as currency, 'FUBI' as endpoint, 'FUBI-M' AS Account, '' AS BalanceType, (margin_balance) as balance, timestamp as asof, ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY timestamp DESC) as rn 
   from RawData.fubi.contract_account_info WITH(NOLOCK) WHERE timestamp BETWEEN '{from_ts:%Y-%m-%d %H:%M:%S}' AND '{to_ts:%Y-%m-%d %H:%M:%S}'  
   UNION
-  SELECT symbol as currency, 'HUBI' as endpoint, 'FUBI-M' AS Account, 'Unrealized' AS BalanceType, (profit_unreal) as balance, timestamp as asof, ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY timestamp DESC) as rn  
+  SELECT symbol as currency, 'FUBI' as endpoint, 'FUBI-M' AS Account, 'Unrealized' AS BalanceType, (profit_unreal) as balance, timestamp as asof, ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY timestamp DESC) as rn  
   from RawData.fubi.contract_account_info WITH(NOLOCK) WHERE timestamp BETWEEN '{from_ts:%Y-%m-%d %H:%M:%S}' AND '{to_ts:%Y-%m-%d %H:%M:%S}'  
   UNION
-  SELECT symbol as currency, 'HUBI' as endpoint, 'FUB2-M' AS Account, '' AS BalanceType, (margin_balance) as balance, timestamp as asof, ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY timestamp DESC) as rn 
+  SELECT symbol as currency, 'FUB2' as endpoint, 'FUB2-M' AS Account, '' AS BalanceType, (margin_balance) as balance, timestamp as asof, ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY timestamp DESC) as rn 
   from RawData.fub2.contract_account_info WITH(NOLOCK) WHERE timestamp BETWEEN '{from_ts:%Y-%m-%d %H:%M:%S}' AND '{to_ts:%Y-%m-%d %H:%M:%S}'
   UNION
-  SELECT symbol as currency, 'HUBI' as endpoint, 'FUB2-M' AS Account, 'Unrealized' AS BalanceType, (profit_unreal) as balance, timestamp as asof, ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY timestamp DESC) as rn 
+  SELECT symbol as currency, 'FUB2' as endpoint, 'FUB2-M' AS Account, 'Unrealized' AS BalanceType, (profit_unreal) as balance, timestamp as asof, ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY timestamp DESC) as rn 
   from RawData.fub2.contract_account_info WITH(NOLOCK) WHERE timestamp BETWEEN '{from_ts:%Y-%m-%d %H:%M:%S}' AND '{to_ts:%Y-%m-%d %H:%M:%S}'
   UNION 
   SELECT ccy as currency, 'OKEX' as endpoint, 'OKEX-2-S1' AS Account, '' AS BalanceType, (cashBal) as balance, asof, ROW_NUMBER() OVER (PARTITION BY ccy ORDER BY asof DESC) as rn 

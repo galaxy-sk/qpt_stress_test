@@ -222,8 +222,8 @@ def summary_asset_loans_cash(summary_exchange_balances_df: pd.DataFrame) -> pd.D
 
 def net_open_positions(report_utc_datetime, trading_repo):
     # Run Bowan's net_open_positions_report
-    db_chicago_datetime = report_utc_datetime.astimezone(config.ChicagoTimeZone)
-    net_open_position_report_df = qpt_historic_pos.impl.open_positions_report.gen_open_position_report(db_chicago_datetime)
+    pg_ts_datetime = report_utc_datetime.astimezone(config.ChicagoTimeZone)
+    net_open_position_report_df = qpt_historic_pos.impl.open_positions_report.gen_open_position_report(pg_ts_datetime)
 
     # Add in timestamp
     columns = ['utc_timestamp'] + list(net_open_position_report_df.columns)
@@ -273,8 +273,7 @@ def generate_reports(eod_date: dt.date, report_utc_datetime: dt.datetime, tradin
 
     # Reformat into format to combine nav & deriv positions
     asset_loans_cash_df = summary_asset_loans_cash(summary_exchange_balances_df)
-    asset_and_open_positions_df = pd.concat([net_open_position_report_df, asset_loans_cash_df], 
-                                            ignore_index=True)
+    asset_and_open_positions_df = pd.concat([net_open_position_report_df, asset_loans_cash_df], ignore_index=True)
 
     # Get marks for all positions:
     """pymd.init()
@@ -286,7 +285,7 @@ def generate_reports(eod_date: dt.date, report_utc_datetime: dt.datetime, tradin
 
     report_datetime = dt.datetime(2022, 11, 20, 22, 0, 0, 0)
     get_start_datetime = pymd.UtcTimeZone.localize(report_datetime - dt.timedelta(days=2))
-    get_end_datetime = pymd.UtcTimeZone.localize(db_chicago_datetime)
+    get_end_datetime = pymd.UtcTimeZone.localize(pg_ts_datetime)
     symbols = set(asset_and_open_positions_df["instrument"])
     underlying = set(asset_and_open_positions_df["underlying"])
     marketdata_repo.reference_rate_ts(symbols, )"""
