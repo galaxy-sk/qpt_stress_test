@@ -222,8 +222,8 @@ def summary_asset_loans_cash(summary_exchange_balances_df: pd.DataFrame) -> pd.D
 
 def net_open_positions(report_utc_datetime, trading_repo):
     # Run Bowan's net_open_positions_report
-    db_chicago_datetime = report_utc_datetime.astimezone(config.ChicagoTimeZone)
-    net_open_position_report_df = qpt_historic_pos.impl.open_positions_report.gen_open_position_report(db_chicago_datetime)
+    pg_ts_datetime = report_utc_datetime.astimezone(config.ChicagoTimeZone)
+    net_open_position_report_df = qpt_historic_pos.impl.open_positions_report.gen_open_position_report(pg_ts_datetime)
 
     # Add in timestamp
     columns = ['utc_timestamp'] + list(net_open_position_report_df.columns)
@@ -273,8 +273,7 @@ def generate_reports(eod_date: dt.date, report_utc_datetime: dt.datetime, tradin
 
     # Reformat into format to combine nav & deriv positions
     asset_loans_cash_df = summary_asset_loans_cash(summary_exchange_balances_df)
-    asset_and_open_positions_df = pd.concat([net_open_position_report_df, asset_loans_cash_df], 
-                                            ignore_index=True)
+    asset_and_open_positions_df = pd.concat([net_open_position_report_df, asset_loans_cash_df], ignore_index=True)
 
     # Get marks for all positions:
     """pymd.init()
@@ -286,21 +285,12 @@ def generate_reports(eod_date: dt.date, report_utc_datetime: dt.datetime, tradin
 
     report_datetime = dt.datetime(2022, 11, 20, 22, 0, 0, 0)
     get_start_datetime = pymd.UtcTimeZone.localize(report_datetime - dt.timedelta(days=2))
-    get_end_datetime = pymd.UtcTimeZone.localize(db_chicago_datetime)
+    get_end_datetime = pymd.UtcTimeZone.localize(pg_ts_datetime)
     symbols = set(asset_and_open_positions_df["instrument"])
     underlying = set(asset_and_open_positions_df["underlying"])
     marketdata_repo.reference_rate_ts(symbols, )"""
     
     return net_open_position_report_df, summary_exchange_balances_df, asset_loans_cash_df, asset_and_open_positions_df
-
-
-def write_raw_exchange_data_to_file(db_chicago_datetime: dt.datetime):
-    db_utc_datetime = db_chicago_datetime.astimezone(config.UtcTimeZone)
-    exchange_repo = qpt_mssql.RawDataRepository(
-                sql_query_driver=pyodbc.SqlQuery, 
-                db_connector_factory=sv_awoh_dw01_pyodbc_connection_factory)
-    raw_exchange_data_df = exchange_repo.get_exchange_balances(asof=db_chicago_datetime).as_dataframe()
-    raw_exchange_data_df.to_csv(f"{db_utc_datetime:%Y-%m-%d_%H%M%S}_raw_exchange_data.csv", sep=',')
 
 
 def run(nav_date: dt.date, positions_at_chicago_time: dt.time):
@@ -339,7 +329,6 @@ if __name__ == "__main__":
     n = 3
     for day_offset in range(n, 0, -1):
         run(dt.date.today() - dt.timedelta(days=day_offset), dt.time(hour=16, minute=0, second=0))
-        
 
     # # Regenerate using as of now
     # run(dt.date.today(), dt.datetime.now().astimezone(config.ChicagoTimeZone).time())
