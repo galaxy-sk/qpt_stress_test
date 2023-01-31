@@ -16,3 +16,4 @@ pytest
 databricks
 databricks-sql
 databricks-sql-connector
+QuantLib

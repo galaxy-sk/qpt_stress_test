@@ -76,7 +76,6 @@ def _format_assets(daytime, df, marks):
                        ['OKEX-2-M-W', 'OKEX-2-M', 'FBLK', 'FBLK', 'FBLK', 'FBLK', 'FBLK', 'FBLK', 'FBLK', 'FBLK', 'FBLK', 'FBLK', 'FBLK', 'FBLK','FBLK', 'FBLK', 'FBLK', 'FBLK', 'FBLK', 'FBLK', 
                         'FBLK', 'FBLK', 'FBLK', 'FBLK'], inplace=True)
 
-    df.drop(df.loc[(df.Account.isin(['DEFI-STRAT-4'])) & (~df.BalanceType.isin(['wallet']))].index, axis=0, inplace=True)
     df.drop(df.loc[(df.Account.isin(['DEFI-STRAT-8'])) & (df.BalanceType.isin(['wallet','borrow_token']))].index, axis=0, inplace=True)
     df.drop(df.loc[(df.Account.isin(['WOOX-1-M-E'])) & (df.Balance<0) & (~df.BalanceType.isin(['Unrealized']))].index, axis=0, inplace=True)
     df.drop(df.loc[(df.Account.isin(['FTXE-1-M-E'])) & (df.Balance<0) & (~df.BalanceType.isin(['Unrealized']))].index, axis=0, inplace=True)
