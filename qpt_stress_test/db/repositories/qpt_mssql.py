@@ -20,6 +20,12 @@ GET_OPERATIONS_EOD_BALANCES = """
         and a.Date_UTC = '{eod_date:%Y%m%d}' 
 """
 
+GET_OPS_ACCOUNT_NAMES = """
+    SELECT distinct Account 
+    FROM  Operations.balances.EndOfDay_00UTC WITH(NOLOCK)
+    WHERE Date_UTC = '{eod_date:%Y%m%d}'
+"""
+
 
 class OperationsRepository:
 
@@ -39,6 +45,11 @@ class OperationsRepository:
             db_connector_factory=self._db_connector_factory).as_list()
         return data[0][0].date()
 
+    def get_account_names(self, eod_date: dt.date) -> SqlQueryInterface:
+        return self._sql_query_class(
+            GET_OPS_ACCOUNT_NAMES.format(eod_date=eod_date),
+            db_connector_factory=self._db_connector_factory)
+
     def get_eod_balances(self, eod_date: dt.date) -> SqlQueryInterface:
         return self._sql_query_class(
             GET_OPERATIONS_EOD_BALANCES.format(eod_date=eod_date),
@@ -46,6 +57,16 @@ class OperationsRepository:
 
 
 GET_TRADING_BALANCES_LAST_TRADEDATE = "SELECT Max(TradeDate) as last_date FROM trading.v2.EndOfDayBalance;"
+
+# Ignore Trader in grouping
+GET_TRADING_EOD_BALANCES = """
+    SELECT TradeDate, Client, Endpoint, Account, Symbol, Product, sum(eodposition * 1e-9) as EodPosition  
+    FROM trading.v2.EndOfDayBalance WITH(NOLOCK)
+    WHERE TradeDate = '{eod_date:%Y%m%d} 00:00:00'
+    group BY TradeDate, Client, Endpoint, Account, Symbol, Product
+    having  sum(eodposition) <> 0 
+"""
+
 
 # crypto.bankbalances: ['ID', 'api_name', 'bfc_name', 'currency', 'balance', 'trade_date', 'InsertTime', 'source']
 GET_CRYPTO_BANKBALANCES = """
@@ -176,6 +197,82 @@ GET_CME_POSITIONS = """
 """
 
 
+GET_CLIENT_FILLS_BY_DATE_SYMBOL = """
+    SELECT 
+        Client, YYYYMMDD, Symbol,
+        sum(case when side = 'S' then -LastFillQuantity / 1e9 else LastFillQuantity/1e9 end) AS Quantity, 
+        sum((case when side = 'S' then -LastFillQuantity / 1e9 else LastFillQuantity/1e9 end) * LastFillPrice) AS Notional, 
+        CASE WHEN sum(case when side = 'S' then -LastFillQuantity / 1e9 else LastFillQuantity/1e9 end) = 0 
+            THEN 0
+            ELSE sum((case when side = 'S' then -LastFillQuantity / 1e9 else LastFillQuantity/1e9 end) * LastFillPrice)
+                / sum(case when side = 'S' then -LastFillQuantity / 1e9 else LastFillQuantity/1e9 end) END
+            AS AveragePrice 
+    FROM trading.crypto.backfill tx  WITH(NOLOCK) 
+    WHERE client in {clients} 
+    UNION
+    SELECT 
+        Client, YYYYMMDD, Symbol,
+        sum(case when side = 'S' then -LastFillQuantity / 1e9 else LastFillQuantity/1e9 end) AS Quantity, 
+        sum((case when side = 'S' then -LastFillQuantity / 1e9 else LastFillQuantity/1e9 end) * LastFillPrice) AS Notional, 
+        CASE WHEN sum(case when side = 'S' then -LastFillQuantity / 1e9 else LastFillQuantity/1e9 end) = 0 
+            THEN 0
+            ELSE sum((case when side = 'S' then -LastFillQuantity / 1e9 else LastFillQuantity/1e9 end) * LastFillPrice)
+                / sum(case when side = 'S' then -LastFillQuantity / 1e9 else LastFillQuantity/1e9 end) END
+            AS AveragePrice 
+    FROM trading.crypto.fills tx  WITH(NOLOCK) 
+    WHERE client in {clients} 
+    
+    GROUP BY Client,YYYYMMDD,Symbol
+    HAVING sum(case when side = 'S' then -LastFillQuantity / 1e9 else LastFillQuantity/1e9 end) <> 0
+"""
+
+# Trader, Endpoint
+GET_ACCOUNT_FILLS_BY_DATE_SYMBOL = """
+    SELECT 
+        Account, YYYYMMDD, Symbol,
+        sum(case when side = 'S' then -LastFillQuantity / 1e9 else LastFillQuantity/1e9 end) AS Quantity, 
+        sum((case when side = 'S' then -LastFillQuantity / 1e9 else LastFillQuantity/1e9 end) * LastFillPrice) AS Notional, 
+        CASE WHEN sum(case when side = 'S' then -LastFillQuantity / 1e9 else LastFillQuantity/1e9 end) = 0 
+            THEN 0
+            ELSE sum((case when side = 'S' then -LastFillQuantity / 1e9 else LastFillQuantity/1e9 end) * LastFillPrice)
+                / sum(case when side = 'S' then -LastFillQuantity / 1e9 else LastFillQuantity/1e9 end) END
+            AS AveragePrice 
+    FROM trading.crypto.backfill tx  WITH(NOLOCK) 
+    WHERE Account in {accounts} 
+    UNION
+    SELECT 
+        Account, YYYYMMDD, Symbol, --, Trader, Endpoint, Account, 
+        sum(case when side = 'S' then -LastFillQuantity / 1e9 else LastFillQuantity/1e9 end) AS Quantity, 
+        sum((case when side = 'S' then -LastFillQuantity / 1e9 else LastFillQuantity/1e9 end) * LastFillPrice) AS Notional, 
+        CASE WHEN sum(case when side = 'S' then -LastFillQuantity / 1e9 else LastFillQuantity/1e9 end) = 0 
+            THEN 0
+            ELSE sum((case when side = 'S' then -LastFillQuantity / 1e9 else LastFillQuantity/1e9 end) * LastFillPrice)
+                / sum(case when side = 'S' then -LastFillQuantity / 1e9 else LastFillQuantity/1e9 end) END
+            AS AveragePrice 
+    FROM trading.crypto.backfill tx  WITH(NOLOCK) 
+    WHERE Account in {accounts} 
+
+    GROUP BY Account,YYYYMMDD,Symbol
+    HAVING sum(case when side = 'S' then -LastFillQuantity / 1e9 else LastFillQuantity/1e9 end) <> 0
+"""
+
+# All valid clients from the day's trading
+# Columns:  tid, Trader	Account	Client	Symbol	Endpoint, Type, Side, Quantity, LastFillQuantity, ExecutedQuantity,
+#           LeavesQuantity, LimitPrice, LastFillPrice, AverageFillPrice, OrderStatus, CurrentMessageID,
+#           PreviousMessageID, OriginalMessageID, BasketOrderID, Date, LiquidityFlag, StopPrice, TimeInForce, FillID
+#           InsertTime, ModifyTime
+GET_VALID_CLIENT_NAMES = """
+    SELECT Distinct Client
+    FROM  trading.crypto.backfill tx  WITH(NOLOCK) 
+    where YYYYMMDD = '{eod_date:%Y%m%d}'
+    UNION
+    SELECT Distinct Client
+    FROM  trading.crypto.fills tx  WITH(NOLOCK) 
+    where Convert(Date, Date) = '{eod_date:%Y%m%d}'
+    ORDER BY Client;
+"""
+
+
 class TradingRepository:
 
     def __init__(self, sql_query_driver, db_connector_factory):
@@ -213,7 +310,25 @@ class TradingRepository:
     def get_trading_eod_balances(self, eod_date: dt.date) -> SqlQueryInterface:
          # Todo: replace with call against trading.EOD_new or similar
         return self._sql_query_class(
-            GET_OPERATIONS_EOD_BALANCES.format(eod_date=eod_date),
+            GET_TRADING_EOD_BALANCES.format(eod_date=eod_date),
+            db_connector_factory=self._db_connector_factory)
+
+    def get_account_fills(self, accounts: list) -> SqlQueryInterface:
+         # Todo: replace with call against trading.EOD_new or similar
+        return self._sql_query_class(
+            GET_ACCOUNT_FILLS_BY_DATE_SYMBOL.format(accounts=tuple(accounts)),
+            db_connector_factory=self._db_connector_factory)
+
+    def get_client_fills(self, clients: list) -> SqlQueryInterface:
+         # Todo: replace with call against trading.EOD_new or similar
+        return self._sql_query_class(
+            GET_CLIENT_FILLS_BY_DATE_SYMBOL.format(clients=tuple(clients)),
+            db_connector_factory=self._db_connector_factory)
+
+    def get_valid_client_names(self, eod_date: dt.date) -> SqlQueryInterface:
+         # Todo: replace with call against trading.EOD_new or similar
+        return self._sql_query_class(
+            GET_VALID_CLIENT_NAMES.format(eod_date=eod_date),
             db_connector_factory=self._db_connector_factory)
 
 

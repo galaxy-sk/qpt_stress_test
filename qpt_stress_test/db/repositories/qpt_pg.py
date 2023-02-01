@@ -26,7 +26,9 @@ df = pd.read_sql(sql, con=pg_conn)
 GET_LAST_TRADING_BALANCES_EOD_TRADEDATE = "SELECT Max(snapshot_time) as last_snapshot_time FROM rms.exchange_position_snapshot;"
 
 GET_NET_OPEN_POSITIONS_SNAPSHOT = """
-    select t1.exchange, t1.account, t1.snapshot_time, t1.long_positions_notional, t1.short_positions_notional, t1.long_positions, t1.short_positions, t1.mark_prices, t1.long_unrealized_pnls, t1.short_unrealized_pnls
+    select 
+        t1.exchange, t1.account, t1.snapshot_time, t1.long_positions_notional, t1.short_positions_notional, 
+        t1.long_positions, t1.short_positions, t1.mark_prices, t1.long_unrealized_pnls, t1.short_unrealized_pnls
     from rms.exchange_position_snapshot t1
         inner join (
             select account, min(snapshot_time) as min_time
@@ -39,6 +41,7 @@ GET_NET_OPEN_POSITIONS_SNAPSHOT = """
 #    t1.long_positions_notional, t1.short_positions_notional, t1.long_positions, t1.short_positions,
 #    t1.mark_prices, t1.long_unrealized_pnls, t1.short_unrealized_pnls
 #    from rms.exchange_position_snapshot t1
+
 
 class TradingRepository:
 
