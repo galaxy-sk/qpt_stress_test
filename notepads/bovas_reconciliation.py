@@ -53,6 +53,7 @@ derivs_utc_datetime = ChicagoTimeZone.localize(dt.datetime.combine(nav_date, dt.
 # COMMAND ----------
 
 mktdata_repo = qpt_mssql.MarketDataRepository(sql_query_driver=databricks_jdbc.SqlQuery, db_connector_factory=databricks_jdbc.SparkJdbcConnector.qpt_mssql_connector(spark))
+operations_repo = qpt_mssql.OperationsRepository(sql_query_driver=databricks_jdbc.SqlQuery, db_connector_factory=databricks_jdbc.SparkJdbcConnector.qpt_mssql_connector(spark))
 trading_repo = qpt_mssql.TradingRepository(sql_query_driver=databricks_jdbc.SqlQuery, db_connector_factory=databricks_jdbc.SparkJdbcConnector.qpt_mssql_connector(spark))
 exchange_repo = qpt_mssql.RawDataRepository(sql_query_driver=databricks_jdbc.SqlQuery, db_connector_factory=databricks_jdbc.SparkJdbcConnector.qpt_mssql_connector(spark))
 
@@ -130,7 +131,7 @@ bovas_assets_df = trading_repo.adhoc_query(bovas_assets_qry).as_dataframe().toPa
 # COMMAND ----------
 
 # Operations EOD 
-op_eod_balances_df = trading_repo.get_operations_eod_balances(nav_date).as_dataframe().toPandas()
+op_eod_balances_df = operations_repo.get_eod_balances(nav_date).as_dataframe().toPandas()
 op_eod_balances_df.Currency.replace(*bovas_currency_replacement, inplace=True)
 op_eod_balances_df['Notional'] = op_eod_balances_df.Balance.apply(lambda d: float(d)) * marks_df.reindex(op_eod_balances_df.Currency).fillna(0).Mark.values
 

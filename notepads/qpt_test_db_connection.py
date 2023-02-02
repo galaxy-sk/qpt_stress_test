@@ -59,7 +59,7 @@ display(spark_sql.as_dataframe().groupby(['Symbol', 'Product', 'Client', 'Endpoi
 
 # These calls execute against MSSQL server
 # qpt_mssql_connector only works on gdt-cluster-market-making
-spark_sql = ms_trading_repo.get_trading_eod_balances(eod_date=dt.date(2023, 1, 4))
+spark_sql = ms_trading_repo.get_eod_balances(eod_date=dt.date(2023, 1, 4))
 display(spark_sql.as_dataframe())
 
 # COMMAND ----------
