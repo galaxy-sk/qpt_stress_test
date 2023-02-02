@@ -12,7 +12,9 @@ from .drivers.jdbc import SqlQuery
 from qpt_stress_test.core.config import ChicagoTimeZone
 
 
-GET_CME_POSITIONS = """
+GET_TRADING_LAST_EOD_TRADEDATE = "SELECT Max(TradeDate) as last_date FROM trading.v2.EndOfDayBalance"
+
+GET_TRADING_CME_POSITIONS = """
     SELECT 
         CONVERT(DATE, m.TradeDate) AS eod_date,
         p.as_of,
@@ -50,8 +52,6 @@ GET_CME_POSITIONS = """
         JOIN Trading.dbo.products s WITH(NOLOCK) ON p.Symbol = s.Contract
     WHERE p.Position <> 0  AND p.Account in {accounts} and convert(DATE, m.TradeDate) = '{as_of:%Y-%m-%d}'
 """
-
-GET_LAST_TRADING_BALANCES_EOD_TRADEDATE = "SELECT Max(TradeDate) as last_date FROM trading.v2.EndOfDayBalance"
 
 GET_OPERATIONS_EOD_BALANCES = """
     select
@@ -170,13 +170,13 @@ class TradingRepository:
     @property
     def last_positions_date(self) -> dt.date:
         _, data = self._sql_query_class(
-            GET_LAST_TRADING_BALANCES_EOD_TRADEDATE, 
+            GET_TRADING_LAST_EOD_TRADEDATE, 
             db_connector_factory=self._db_connector_factory).as_list()
         return data[0][0].date()
 
     def get_cme_positions(self, at_dtt_utc: dt.datetime) -> SqlQueryInterface:
         return self._sql_query_class(
-            GET_CME_POSITIONS.format(accounts=('UNMBF222', ''), as_of=at_dtt_utc.astimezone(ChicagoTimeZone)),
+            GET_TRADING_CME_POSITIONS.format(accounts=('UNMBF222', ''), as_of=at_dtt_utc.astimezone(ChicagoTimeZone)),
             db_connector_factory=self._db_connector_factory)
 
     def get_operations_eod_balances(self, eod_date: dt.date) -> SqlQueryInterface:
@@ -184,7 +184,7 @@ class TradingRepository:
             GET_OPERATIONS_EOD_BALANCES.format(eod_date=eod_date),
             db_connector_factory=self._db_connector_factory)
 
-    def get_trading_eod_balances(self, eod_date: dt.date) -> SqlQueryInterface:
+    def get_eod_balances(self, eod_date: dt.date) -> SqlQueryInterface:
         # Todo: replace with call against trading.EOD_new or similar
         return self._sql_query_class(
             GET_OPERATIONS_EOD_BALANCES.format(trade_date=eod_date),

@@ -20,7 +20,7 @@ GET_OPERATIONS_EOD_BALANCES = """
         and a.Date_UTC = '{eod_date:%Y%m%d}' 
 """
 
-GET_OPS_ACCOUNT_NAMES = """
+GET_OPERATIONS_EOD_ACCOUNT_NAMES = """
     SELECT distinct Account 
     FROM  Operations.balances.EndOfDay_00UTC WITH(NOLOCK)
     WHERE Date_UTC = '{eod_date:%Y%m%d}'
@@ -45,9 +45,9 @@ class OperationsRepository:
             db_connector_factory=self._db_connector_factory).as_list()
         return data[0][0].date()
 
-    def get_account_names(self, eod_date: dt.date) -> SqlQueryInterface:
+    def get_eod_account_names(self, eod_date: dt.date) -> SqlQueryInterface:
         return self._sql_query_class(
-            GET_OPS_ACCOUNT_NAMES.format(eod_date=eod_date),
+            GET_OPERATIONS_EOD_ACCOUNT_NAMES.format(eod_date=eod_date),
             db_connector_factory=self._db_connector_factory)
 
     def get_eod_balances(self, eod_date: dt.date) -> SqlQueryInterface:
@@ -56,7 +56,7 @@ class OperationsRepository:
             db_connector_factory=self._db_connector_factory)
 
 
-GET_TRADING_BALANCES_LAST_TRADEDATE = "SELECT Max(TradeDate) as last_date FROM trading.v2.EndOfDayBalance;"
+GET_TRADING_LAST_EOD_TRADEDATE = "SELECT Max(TradeDate) as last_date FROM trading.v2.EndOfDayBalance;"
 
 # Ignore Trader in grouping
 GET_TRADING_EOD_BALANCES = """
@@ -69,14 +69,14 @@ GET_TRADING_EOD_BALANCES = """
 
 
 # crypto.bankbalances: ['ID', 'api_name', 'bfc_name', 'currency', 'balance', 'trade_date', 'InsertTime', 'source']
-GET_CRYPTO_BANKBALANCES = """
+GET_TRADING_CRYPTO_BANKBALANCES = """
     select bfc_name as Account, balance as Balance, 'Cash' as BalanceType, UPPER(currency) as Currency,
         'crypto.bankbalances' as Source, trade_date as Timestamp, InsertTime as Timestamp_Native
     from trading.crypto.bankbalances 
     where trade_date = '{eod_date:%Y%m%d}'
 """
 
-GET_CME_POSITIONS = """
+GET_TRADING_CME_POSITIONS = """
     SELECT 
         CONVERT(DATE, m.TradeDate) AS eod_date,
         p.as_of,
@@ -261,7 +261,7 @@ GET_ACCOUNT_FILLS_BY_DATE_SYMBOL = """
 #           LeavesQuantity, LimitPrice, LastFillPrice, AverageFillPrice, OrderStatus, CurrentMessageID,
 #           PreviousMessageID, OriginalMessageID, BasketOrderID, Date, LiquidityFlag, StopPrice, TimeInForce, FillID
 #           InsertTime, ModifyTime
-GET_VALID_CLIENT_NAMES = """
+GET_TRADING_DAILY_CLIENT_NAMES = """
     SELECT Distinct Client
     FROM  trading.crypto.backfill tx  WITH(NOLOCK) 
     where YYYYMMDD = '{eod_date:%Y%m%d}'
@@ -269,9 +269,17 @@ GET_VALID_CLIENT_NAMES = """
     SELECT Distinct Client
     FROM  trading.crypto.fills tx  WITH(NOLOCK) 
     where Convert(Date, Date) = '{eod_date:%Y%m%d}'
-    ORDER BY Client;
 """
 
+GET_TRADING_DAILY_ACCOUNTS = """
+    SELECT Distinct Account
+    FROM  trading.crypto.backfill tx  WITH(NOLOCK) 
+    where YYYYMMDD = '{eod_date:%Y%m%d}'
+    UNION
+    SELECT Distinct Account
+    FROM  trading.crypto.fills tx  WITH(NOLOCK) 
+    where Convert(Date, Date) = '{eod_date:%Y%m%d}'
+"""
 
 class TradingRepository:
 
@@ -287,27 +295,21 @@ class TradingRepository:
     @property
     def last_positions_date(self) -> dt.date:
         _, data = self._sql_query_class(
-            GET_TRADING_BALANCES_LAST_TRADEDATE,
+            GET_TRADING_LAST_EOD_TRADEDATE,
             db_connector_factory=self._db_connector_factory).as_list()
         return data[0][0].date()
 
     def get_bank_balances(self, eod_date: dt.date) -> SqlQueryInterface:
         return self._sql_query_class(
-            GET_CRYPTO_BANKBALANCES.format(eod_date=eod_date),
+            GET_TRADING_CRYPTO_BANKBALANCES.format(eod_date=eod_date),
             db_connector_factory=self._db_connector_factory)
 
     def get_cme_positions(self, at_dtt_utc: dt.datetime) -> SqlQueryInterface:
         return self._sql_query_class(
-            GET_CME_POSITIONS.format(accounts=('UNMBF222', ''), as_of=at_dtt_utc.astimezone(ChicagoTimeZone)),
+            GET_TRADING_CME_POSITIONS.format(accounts=('UNMBF222', ''), as_of=at_dtt_utc.astimezone(ChicagoTimeZone)),
             db_connector_factory=self._db_connector_factory)
 
-    def get_operations_eod_balances(self, eod_date: dt.date) -> SqlQueryInterface:
-        # Todo: remove this & use OperationsRepository.get_eod_balances
-        return self._sql_query_class(
-            GET_OPERATIONS_EOD_BALANCES.format(eod_date=eod_date),
-            db_connector_factory=self._db_connector_factory)
-
-    def get_trading_eod_balances(self, eod_date: dt.date) -> SqlQueryInterface:
+    def get_eod_balances(self, eod_date: dt.date) -> SqlQueryInterface:
          # Todo: replace with call against trading.EOD_new or similar
         return self._sql_query_class(
             GET_TRADING_EOD_BALANCES.format(eod_date=eod_date),
@@ -325,10 +327,16 @@ class TradingRepository:
             GET_CLIENT_FILLS_BY_DATE_SYMBOL.format(clients=tuple(clients)),
             db_connector_factory=self._db_connector_factory)
 
-    def get_valid_client_names(self, eod_date: dt.date) -> SqlQueryInterface:
+    def get_daily_accounts(self, eod_date: dt.date) -> SqlQueryInterface:
          # Todo: replace with call against trading.EOD_new or similar
         return self._sql_query_class(
-            GET_VALID_CLIENT_NAMES.format(eod_date=eod_date),
+            GET_TRADING_DAILY_ACCOUNTS.format(eod_date=eod_date),
+            db_connector_factory=self._db_connector_factory)
+
+    def get_daily_client_names(self, eod_date: dt.date) -> SqlQueryInterface:
+         # Todo: replace with call against trading.EOD_new or similar
+        return self._sql_query_class(
+            GET_TRADING_DAILY_CLIENT_NAMES.format(eod_date=eod_date),
             db_connector_factory=self._db_connector_factory)
 
 

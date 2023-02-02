@@ -263,7 +263,7 @@ def net_open_positions(report_utc_datetime, trading_repo):
     return pd.concat([net_open_position_report_df, cme_df], ignore_index=True)
 
 
-def generate_reports(eod_date: dt.date, report_utc_datetime: dt.datetime, trading_repo, marketdata_repo=None):
+def generate_nav_and_postions_reports(eod_date: dt.date, report_utc_datetime: dt.datetime, trading_repo, marketdata_repo=None):
 
     net_open_position_report_df = net_open_positions(report_utc_datetime, trading_repo)
 
@@ -274,6 +274,69 @@ def generate_reports(eod_date: dt.date, report_utc_datetime: dt.datetime, tradin
     # Reformat into format to combine nav & deriv positions
     asset_loans_cash_df = summary_asset_loans_cash(summary_exchange_balances_df)
     asset_and_open_positions_df = pd.concat([net_open_position_report_df, asset_loans_cash_df], ignore_index=True)
+
+    # Dump to file
+    net_open_position_report_df.to_csv(f"{report_utc_datetime:%Y-%m-%d_%H%M%S}_net_open_positions.csv", sep=',')
+    summary_exchange_balances_df.to_csv(f"{eod_date:%Y-%m-%d}_summary_exchange_balances_00utc.csv", sep=',')
+    asset_and_open_positions_df.to_csv(f"{report_utc_datetime:%Y-%m-%d_%H%M%S}_asset_and_open_positions.csv", sep=',')
+
+    return net_open_position_report_df, summary_exchange_balances_df, asset_loans_cash_df, asset_and_open_positions_df
+
+
+def generate_trading_reports(eod_date: dt.date, trading_repo, operations_repo):
+
+    # Group by TradeDate, Endpoint, Account, Product: sum EodPosition
+    valid_client_list = [entry['Client'] for entry in trading_repo.get_daily_client_names(eod_date).as_map().values()]
+    # another issue; ops and fills have different account lists, and some may be due to name mappings, so union the two
+    fills_account_list = [entry['Account'] for entry in trading_repo.get_daily_accounts(eod_date).as_map().values()]
+    ops_account_list = [entry['Account'] for entry in operations_repo.get_eod_account_names(eod_date).as_map().values()]
+    valid_account_list = sorted(set(fills_account_list + ops_account_list + ['KRKE-E', ]))
+    trading_eod_balances = trading_repo.get_eod_balances(eod_date).as_dataframe()
+
+    # Filter out invalid accounts and clients
+    valid_trading_balances = trading_eod_balances.loc[
+        (trading_eod_balances['Account'].isin(valid_account_list))
+        & (trading_eod_balances['Client'].isin(valid_client_list))].reset_index(drop=True)
+
+    # Filter out non-trading clients
+    reportable_trading_balances = valid_trading_balances.loc[
+        valid_trading_balances['Client'].apply(lambda client: client.startswith("CC_T"))].reset_index(drop=True)
+
+    # Generate product summary
+    trading_product_summary = reportable_trading_balances[
+        ['TradeDate', 'Product', 'Symbol', 'Endpoint', 'Account', 'EodPosition']] \
+        .groupby(['TradeDate', 'Product', 'Symbol', 'Endpoint', 'Account']).sum().reset_index()
+
+    # Generate client summary
+    # Make each currency/product into a position column
+    trading_position_by_product = reportable_trading_balances.pivot(
+        index=['TradeDate', 'Client', 'Endpoint', 'Account', 'Symbol'],
+        columns='Product')['EodPosition'].reset_index().rename_axis(None, axis='columns').fillna(0)
+    # Group by Client Symbol (remove Endpoint	Account  columns for group_by)
+    trading_client_summary_df = trading_position_by_product[
+        trading_position_by_product.columns.difference(['Endpoint', 'Account'], sort=False)].groupby(
+        ['TradeDate', 'Client', 'Symbol']).sum().reset_index()
+
+    reportable_trading_balances.to_csv(f"{eod_date:%Y-%m-%d}_trading_client_detail.csv", sep=',')
+    trading_client_summary_df.to_csv(f"{eod_date:%Y-%m-%d}_trading_client_summary.csv", sep=',')
+    trading_product_summary.to_csv(f"{eod_date:%Y-%m-%d}_trading_product_summary.csv", sep=',')
+
+
+def run(nav_date: dt.date, positions_at_chicago_time: dt.time):
+
+    db_chicago_datetime = config.ChicagoTimeZone.localize(dt.datetime.combine(nav_date, positions_at_chicago_time))
+    db_utc_datetime = db_chicago_datetime.astimezone(config.UtcTimeZone)
+
+    trading_repo = qpt_mssql.TradingRepository(sql_query_driver=pyodbc.SqlQuery,
+                                               db_connector_factory=sv_awoh_dw01_pyodbc_connection_factory)
+    operations_repo = qpt_mssql.OperationsRepository(sql_query_driver=pyodbc.SqlQuery,
+                                                     db_connector_factory=sv_awoh_dw01_pyodbc_connection_factory)
+
+    # These are replicating Bovas's NAV numbers, and Bowen's net open positions reports
+    generate_nav_and_postions_reports(nav_date, db_utc_datetime,  trading_repo=trading_repo)
+
+    # Also run some trading client reports
+    generate_trading_reports(nav_date, trading_repo, operations_repo)
 
     # Get marks for all positions:
     """pymd.init()
@@ -289,33 +352,9 @@ def generate_reports(eod_date: dt.date, report_utc_datetime: dt.datetime, tradin
     symbols = set(asset_and_open_positions_df["instrument"])
     underlying = set(asset_and_open_positions_df["underlying"])
     marketdata_repo.reference_rate_ts(symbols, )"""
-    
-    return net_open_position_report_df, summary_exchange_balances_df, asset_loans_cash_df, asset_and_open_positions_df
 
 
-def run(nav_date: dt.date, positions_at_chicago_time: dt.time):
 
-    db_chicago_datetime = config.ChicagoTimeZone.localize(dt.datetime.combine(nav_date, positions_at_chicago_time))
-    db_utc_datetime = db_chicago_datetime.astimezone(config.UtcTimeZone)
-
-    (
-        net_open_position_report_df,
-        summary_exchange_balances_df,
-        asset_loans_cash_df,
-        asset_and_open_positions_df
-    ) = generate_reports(
-            nav_date, 
-            db_utc_datetime, 
-            trading_repo=qpt_mssql.TradingRepository(
-                sql_query_driver=pyodbc.SqlQuery, 
-                db_connector_factory=sv_awoh_dw01_pyodbc_connection_factory))
-
-    # Dump to file
-    net_open_position_report_df.to_csv(f"{db_utc_datetime:%Y-%m-%d_%H%M%S}_net_open_positions.csv", sep=',')
-    summary_exchange_balances_df.to_csv(f"{nav_date:%Y-%m-%d}_summary_exchange_balances_00utc.csv", sep=',')
-    asset_and_open_positions_df.to_csv(f"{db_utc_datetime:%Y-%m-%d_%H%M%S}_asset_and_open_positions.csv", sep=',')
-
-    
 if __name__ == "__main__":
 
     # Bowen's code has some assumptions on location of modules relative to his code:
